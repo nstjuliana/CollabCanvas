@@ -43,7 +43,7 @@ collabcanvas/
 
 ### Phase 1: Project Setup & Infrastructure
 
-- [ ] **Task 1: Initialize React project and install dependencies**
+- [x] **Task 1: Initialize React project and install dependencies**
   - **Files Created:**
     - `package.json`
     - `public/index.html`

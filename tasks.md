@@ -80,9 +80,11 @@ collabcanvas/
     - `src/services/auth.js`
   - **Description:** Create auth functions: signup, login, logout, getCurrentUser, onAuthStateChanged
 
-- [ ] **Task 5: Build authentication UI components**
+- [x] **Task 5: Build authentication UI components**
   - **Files Created:**
     - `src/components/AuthForm.jsx`
+    - `src/components/AuthForm.css`
+    - `src/App.css`
   - **Files Updated:**
     - `src/App.jsx`
   - **Description:** Create login/signup form with email/password. Require authentication before accessing canvas. Handle auth state in App

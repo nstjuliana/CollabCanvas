@@ -75,7 +75,7 @@ collabcanvas/
 
 ### Phase 2: Authentication
 
-- [ ] **Task 4: Implement authentication service layer**
+- [x] **Task 4: Implement authentication service layer**
   - **Files Created:**
     - `src/services/auth.js`
   - **Description:** Create auth functions: signup, login, logout, getCurrentUser, onAuthStateChanged

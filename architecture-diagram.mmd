@@ -1,0 +1,101 @@
+graph TB
+    subgraph "Client Browser"
+        UI[React Application]
+        
+        subgraph "Components Layer"
+            Canvas[Canvas Component<br/>Konva.js]
+            Shape[Shape Component]
+            Cursor[Cursor Component]
+            Presence[Presence Panel]
+            Auth[Auth Form]
+        end
+        
+        subgraph "Hooks Layer"
+            useCanvas[useCanvas Hook]
+            useShapes[useShapes Hook]
+            useCursors[useCursors Hook]
+            usePresence[usePresence Hook]
+        end
+        
+        subgraph "Service Layer"
+            FirebaseInit[firebase.js<br/>Initialization]
+            AuthService[auth.js<br/>Auth Operations]
+            ShapeService[shapes.js<br/>CRUD Operations]
+            CursorService[cursors.js<br/>Cursor Updates]
+            PresenceService[presence.js<br/>Online Status]
+        end
+        
+        subgraph "Utilities"
+            Constants[constants.js<br/>Canvas: 5000x5000]
+            Helpers[helpers.js<br/>Shared Functions]
+        end
+    end
+    
+    subgraph "Firebase Backend"
+        subgraph "Firebase Auth"
+            AuthProvider[Authentication Provider<br/>Email/Password]
+            UserAccounts[User Accounts DB]
+        end
+        
+        subgraph "Cloud Firestore"
+            ShapesCollection[(shapes collection)]
+            ShapeDoc[Shape Documents<br/>id, type, x, y, width, height, color, userId]
+        end
+        
+        subgraph "Realtime Database"
+            CursorsPath["cursors/{userId}<br/>x, y, username"]
+            PresencePath["presence/{userId}<br/>online, lastSeen"]
+        end
+    end
+    
+    subgraph "Deployment"
+        Hosting[Vercel / Firebase Hosting]
+        EnvVars[Environment Variables<br/>API Keys, Project IDs]
+    end
+    
+    %% Component to Hook connections
+    Canvas --> useCanvas
+    Canvas --> useShapes
+    Canvas --> useCursors
+    Presence --> usePresence
+    Auth --> AuthService
+    
+    %% Hook to Service connections
+    useShapes --> ShapeService
+    useCursors --> CursorService
+    usePresence --> PresenceService
+    
+    %% Service to Firebase connections
+    AuthService --> FirebaseInit
+    ShapeService --> FirebaseInit
+    CursorService --> FirebaseInit
+    PresenceService --> FirebaseInit
+    
+    FirebaseInit --> AuthProvider
+    AuthService --> AuthProvider
+    AuthProvider --> UserAccounts
+    
+    ShapeService -->|Real-time Listener| ShapesCollection
+    ShapeService -->|CRUD Operations| ShapeDoc
+    ShapesCollection --> ShapeDoc
+    
+    CursorService -->|Publish/Subscribe| CursorsPath
+    PresenceService -->|Online/Offline Events| PresencePath
+    
+    %% Deployment connections
+    UI --> Hosting
+    Hosting --> EnvVars
+    EnvVars --> FirebaseInit
+    
+    %% Utility connections
+    Canvas -.uses.-> Constants
+    ShapeService -.uses.-> Helpers
+    
+    %% Styling
+    classDef clientClass fill:#e1f5ff,stroke:#01579b,stroke-width:2px
+    classDef firebaseClass fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef deployClass fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    
+    class UI,Canvas,Shape,Cursor,Presence,Auth,useCanvas,useShapes,useCursors,usePresence,FirebaseInit,AuthService,ShapeService,CursorService,PresenceService,Constants,Helpers clientClass
+    class AuthProvider,UserAccounts,ShapesCollection,ShapeDoc,CursorsPath,PresencePath firebaseClass
+    class Hosting,EnvVars deployClass

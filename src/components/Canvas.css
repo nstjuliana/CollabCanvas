@@ -1,0 +1,193 @@
+.canvas-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #f5f5f5;
+  cursor: grab;
+}
+
+.canvas-wrapper.dragging {
+  cursor: grabbing;
+}
+
+/* Canvas Controls */
+.canvas-controls {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 10;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.control-group {
+  display: flex;
+  gap: 0.5rem;
+  background: white;
+  border-radius: 8px;
+  padding: 0.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.control-button {
+  padding: 0.5rem 1rem;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #333;
+}
+
+.control-button:hover {
+  background: #f5f5f5;
+  border-color: #667eea;
+  color: #667eea;
+}
+
+.control-button:active {
+  transform: scale(0.95);
+}
+
+.zoom-indicator {
+  background: white;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.zoom-label {
+  color: #666;
+  font-weight: 500;
+}
+
+.zoom-value {
+  color: #667eea;
+  font-weight: 600;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* Canvas Instructions */
+.canvas-instructions {
+  position: absolute;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.9);
+  color: black;
+  padding: 0.75rem 1.5rem;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.canvas-instructions p {
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Konva Stage */
+.konvajs-content {
+  background: #f5f5f5;
+}
+
+/* Cursor states */
+.canvas-wrapper.dragging canvas {
+  cursor: grabbing !important;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .canvas-controls {
+    top: 0.5rem;
+    left: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .control-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .control-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .zoom-indicator {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .canvas-instructions {
+    bottom: 0.5rem;
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .canvas-wrapper {
+    background: #1a1a1a;
+  }
+
+  .control-group,
+  .zoom-indicator {
+    background: #2a2a2a;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  .control-button {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+
+  .control-button:hover {
+    background: #333;
+    border-color: #667eea;
+  }
+
+  .zoom-label {
+    color: #999;
+  }
+
+  .canvas-instructions {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.canvas-controls,
+.canvas-instructions {
+  animation: fadeIn 0.4s ease-out;
+}
+

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, logout } from './services/auth';
 import AuthForm from './components/AuthForm';
+import Canvas from './components/Canvas';
 import './App.css';
 
 function App() {
@@ -54,13 +55,7 @@ function App() {
         </div>
       </header>
       <main className="app-main">
-        <div className="canvas-placeholder">
-          <h2>Canvas Coming Soon!</h2>
-          <p>Welcome to CollabCanvas, {user.displayName}!</p>
-          <p className="placeholder-text">
-            The collaborative canvas will be implemented in the next tasks.
-          </p>
-        </div>
+        <Canvas />
       </main>
     </div>
   );

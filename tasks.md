@@ -93,9 +93,10 @@ collabcanvas/
 
 ### Phase 3: Canvas Infrastructure
 
-- [ ] **Task 6: Create basic canvas component with pan and zoom**
+- [x] **Task 6: Create basic canvas component with pan and zoom**
   - **Files Created:**
     - `src/components/Canvas.jsx`
+    - `src/components/Canvas.css`
     - `src/hooks/useCanvas.js`
   - **Files Updated:**
     - `src/App.jsx`

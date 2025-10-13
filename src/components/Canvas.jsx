@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Stage, Layer, Rect, Text } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import Shape from './Shape';
@@ -17,6 +17,12 @@ function Canvas() {
     resetCanvas,
     fitToView,
   } = useCanvas();
+
+  const containerRef = useRef(null);
+  const [dimensions, setDimensions] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
 
   // Demo shapes for testing - will be replaced with Firestore data in Task 8
   const [demoShapes] = useState([
@@ -77,17 +83,35 @@ function Canvas() {
     },
   ]);
 
-  // Fit to view on mount
+  // Handle window resize and measure container
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const { width, height } = containerRef.current.getBoundingClientRect();
+        setDimensions({ width, height });
+      }
+    };
+
+    // Initial measurement
+    updateDimensions();
+
+    // Listen for window resize
+    window.addEventListener('resize', updateDimensions);
+    
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
+  // Fit to view on mount and when dimensions change
   useEffect(() => {
     // Small delay to ensure stage is properly sized
     const timer = setTimeout(() => {
       fitToView();
     }, 100);
     return () => clearTimeout(timer);
-  }, [fitToView]);
+  }, [fitToView, dimensions]);
 
   return (
-    <div className="canvas-wrapper">
+    <div className="canvas-wrapper" ref={containerRef}>
       {/* Canvas Controls */}
       <div className="canvas-controls">
         <div className="control-group">
@@ -121,8 +145,8 @@ function Canvas() {
       {/* Konva Stage */}
       <Stage
         ref={stageRef}
-        width={window.innerWidth}
-        height={window.innerHeight - 60} // Account for header
+        width={dimensions.width}
+        height={dimensions.height}
         x={stagePosition.x}
         y={stagePosition.y}
         scaleX={stageScale}

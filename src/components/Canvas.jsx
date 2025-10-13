@@ -1,7 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stage, Layer, Rect, Text } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
-import { CANVAS_CONFIG } from '../utils/constants';
+import Shape from './Shape';
+import { CANVAS_CONFIG, SHAPE_TYPES, DEFAULT_SHAPE_COLOR, SHAPE_DEFAULTS } from '../utils/constants';
 import './Canvas.css';
 
 function Canvas() {
@@ -16,6 +17,65 @@ function Canvas() {
     resetCanvas,
     fitToView,
   } = useCanvas();
+
+  // Demo shapes for testing - will be replaced with Firestore data in Task 8
+  const [demoShapes] = useState([
+    {
+      id: 'demo-1',
+      type: SHAPE_TYPES.RECTANGLE,
+      x: 500,
+      y: 500,
+      width: 150,
+      height: 100,
+      fill: '#FF6B6B',
+      stroke: '#333333',
+      strokeWidth: 2,
+      cornerRadius: 5,
+      opacity: 1,
+      rotation: 0,
+    },
+    {
+      id: 'demo-2',
+      type: SHAPE_TYPES.RECTANGLE,
+      x: 800,
+      y: 600,
+      width: SHAPE_DEFAULTS.WIDTH,
+      height: SHAPE_DEFAULTS.HEIGHT,
+      fill: '#4ECDC4',
+      stroke: '#333333',
+      strokeWidth: 2,
+      cornerRadius: 0,
+      opacity: 1,
+      rotation: 15,
+    },
+    {
+      id: 'demo-3',
+      type: SHAPE_TYPES.CIRCLE,
+      x: 1200,
+      y: 700,
+      width: 120, // Used as diameter
+      height: 120,
+      fill: '#45B7D1',
+      stroke: '#333333',
+      strokeWidth: 2,
+      opacity: 1,
+      rotation: 0,
+    },
+    {
+      id: 'demo-4',
+      type: SHAPE_TYPES.RECTANGLE,
+      x: 1500,
+      y: 500,
+      width: 200,
+      height: 80,
+      fill: DEFAULT_SHAPE_COLOR,
+      stroke: '#333333',
+      strokeWidth: 3,
+      cornerRadius: 10,
+      opacity: 0.8,
+      rotation: -10,
+    },
+  ]);
 
   // Fit to view on mount
   useEffect(() => {
@@ -150,9 +210,17 @@ function Canvas() {
           <Rect x={CANVAS_CONFIG.WIDTH - 150} y={CANVAS_CONFIG.HEIGHT - 150} width={100} height={100} fill="#FFA07A" opacity={0.3} cornerRadius={10} />
         </Layer>
 
-        {/* Shapes Layer - will be populated in future tasks */}
+        {/* Shapes Layer */}
         <Layer>
-          {/* Shapes will go here */}
+          {/* Demo shapes - will be replaced with real-time data in future tasks */}
+          {demoShapes.map((shape) => (
+            <Shape
+              key={shape.id}
+              shapeData={shape}
+              isSelected={false}
+              isLocked={false}
+            />
+          ))}
         </Layer>
       </Stage>
     </div>

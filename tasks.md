@@ -102,7 +102,7 @@ collabcanvas/
     - `src/App.jsx`
   - **Description:** Implement Konva Stage with 5000x5000 workspace, mouse-based pan (drag), and zoom (wheel)
 
-- [ ] **Task 7: Implement shape rendering component**
+- [x] **Task 7: Implement shape rendering component**
   - **Files Created:**
     - `src/components/Shape.jsx`
   - **Files Updated:**

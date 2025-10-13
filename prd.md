@@ -32,11 +32,18 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 
 ## Key MVP Features
 
+### 0. Canvas Session Model
+**Priority:** Critical
+- **Single global canvas** - all authenticated users collaborate on the same workspace
+- Any user visiting the URL is prompted to login
+- Upon authentication, user immediately joins the main canvas collaboration
+- Firestore path: `/shapes/{shapeId}` (shared by all users)
+- RTDB paths: `/cursors/{userId}`, `/presence/{userId}`
+
 ### 1. Canvas Infrastructure
 **Priority:** Critical
 - 5,000 x 5,000 pixel workspace with smooth pan capability
 - Zoom in/out functionality (mouse wheel or pinch gestures)
-- Tech decisions should support achieving 60 FPS performance targets in future iterations
 
 ### 2. Shape Creation & Manipulation
 **Priority:** Critical
@@ -44,12 +51,14 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 - Click-to-create or drag-to-create shapes
 - Click-and-drag to move objects
 - Visual feedback during manipulation
+- **Object Locking:** When a user begins editing (dragging) a shape, it becomes locked to other users until the edit is complete. First user to interact gets priority
 
 ### 3. Real-Time Synchronization
 **Priority:** Critical
 - WebSocket or real-time database connection
 - Broadcast shape creation events
 - Broadcast shape movement/modification events
+- Broadcast shape lock/unlock events for concurrent edit prevention
 
 ### 4. Multiplayer Cursors
 **Priority:** Critical
@@ -80,6 +89,7 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 - Publicly accessible URL
 - Supports 2+ concurrent users minimum
 - Stable hosting environment
+- All users share the same global canvas workspace
 
 ---
 
@@ -128,20 +138,16 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 ## Potential Pitfalls & Considerations
 
 ### Firebase-Specific
-- **Rate Limits:** Free tier has read/write limits; may need to throttle cursor updates
 - **Cost:** Real-time operations can get expensive at scale; budget accordingly
 - **Data Structure:** Firestore document size limits (1MB); design schema carefully
 - **Latency:** Firestore has ~100-200ms latency; use Realtime Database for cursors
 
 ### Real-Time Sync Challenges
 - **Network Issues:** Test with throttled connections; implement reconnection logic
-- **Race Conditions:** Multiple users editing same object needs clear "last write wins" logic
-- **Cursor Flooding:** Throttle cursor position updates to avoid overwhelming the network
+- **Concurrent Edits:** Implement object locking - first user to interact with a shape gets edit priority
 - **State Bloat:** Old cursor positions must be cleaned up when users disconnect
 
 ### Canvas Performance
-- **Object Count:** Even with 60 FPS target, test with 100+ objects to ensure headroom
-- **Re-render Optimization:** Only redraw changed objects, not entire canvas
 - **Memory Leaks:** Event listeners and WebSocket connections must be cleaned up
 
 ### Authentication
@@ -154,10 +160,10 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 - **HTTPS Required:** WebSockets often require secure connections
 - **CORS Issues:** Ensure frontend can communicate with backend across domains
 
-### Time Management (24-Hour MVP)
-- **Scope Creep:** Resist adding features beyond requirements
-- **Perfect vs Done:** A working multiplayer canvas with basic shapes beats a beautiful canvas with broken sync
-- **Testing Time:** Reserve final 4 hours for multi-user testing and bug fixes
+### Testing Strategy (MVP)
+- **Manual Testing:** Test in multiple browser tabs/windows to verify real-time sync
+- **Multi-User Scenarios:** Test object locking with simultaneous edits
+- **Session Persistence:** Verify canvas state persists after refresh
 
 ---
 
@@ -166,12 +172,13 @@ CollabCanvas is a real-time collaborative design tool that enables multiple user
 The MVP passes if:
 1. ✅ Two users can see each other's cursors with names in real-time
 2. ✅ Creating a shape appears instantly for all users
-3. ✅ Moving a shape updates for all users within 100ms
-4. ✅ Users can pan and zoom smoothly at 60 FPS
+3. ✅ Moving a shape updates for all users in real-time
+4. ✅ Users can pan and zoom the canvas smoothly
 5. ✅ Canvas state persists after refresh
-6. ✅ Users must authenticate with accounts
+6. ✅ Users must authenticate with accounts before accessing canvas
 7. ✅ Application is deployed and publicly accessible
 8. ✅ Presence indicator shows who's online
+9. ✅ Object locking prevents concurrent edits (first user gets priority)
 
 ---
 

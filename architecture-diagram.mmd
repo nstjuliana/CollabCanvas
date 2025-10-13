@@ -38,8 +38,8 @@ graph TB
         end
         
         subgraph "Cloud Firestore"
-            ShapesCollection[(shapes collection)]
-            ShapeDoc[Shape Documents<br/>id, type, x, y, width, height, color, userId]
+            ShapesCollection[(shapes collection<br/>Global - All Users)]
+            ShapeDoc[Shape Documents<br/>id, type, x, y, width, height, color, userId, lockedBy]
         end
         
         subgraph "Realtime Database"

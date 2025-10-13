@@ -14,12 +14,6 @@ collabcanvas/
 │   │   ├── PresencePanel.jsx
 │   │   └── AuthForm.jsx
 │   ├── services/
-│   │   ├── __tests__/
-│   │   │   ├── firebase.test.js
-│   │   │   ├── auth.test.js
-│   │   │   ├── shapes.test.js
-│   │   │   ├── cursors.test.js
-│   │   │   └── presence.test.js
 │   │   ├── firebase.js
 │   │   ├── auth.js
 │   │   ├── shapes.js
@@ -30,10 +24,6 @@ collabcanvas/
 │   │   ├── useShapes.js
 │   │   ├── useCursors.js
 │   │   └── usePresence.js
-│   ├── __tests__/
-│   │   └── integration/
-│   │       ├── shapeSync.test.js
-│   │       └── statePersistence.test.js
 │   ├── utils/
 │   │   ├── constants.js
 │   │   └── helpers.js
@@ -64,25 +54,14 @@ collabcanvas/
     - `README.md`
   - **Description:** Create React app, install Firebase SDK, Konva.js, and React-Konva
 
-- [ ] **Task 2: Set up testing infrastructure**
-  - **Files Created:**
-    - `jest.config.js`
-    - `setupTests.js`
-  - **Files Updated:**
-    - `package.json`
-    - `firebase.json`
-  - **Description:** Install Jest, React Testing Library, Firebase testing utilities, and configure Firebase Emulator Suite. Add test scripts to package.json
-
-- [ ] **Task 3: Configure Firebase project and environment variables**
+- [ ] **Task 2: Configure Firebase project and environment variables**
   - **Files Created:**
     - `src/services/firebase.js`
     - `.env.example`
     - `firebase.json`
-    - `src/services/__tests__/firebase.test.js`
-  - **Description:** Set up Firebase project, initialize Firestore, Realtime Database, and Auth. Configure environment variables
-  - **Test:** Unit test to verify Firebase initialization and config validation
+  - **Description:** Set up Firebase project (single global canvas), initialize Firestore, Realtime Database, and Auth. Configure environment variables. Firestore path: `/shapes/{shapeId}`, RTDB paths: `/cursors/{userId}`, `/presence/{userId}`
 
-- [ ] **Task 4: Set up project constants and utilities**
+- [ ] **Task 3: Set up project constants and utilities**
   - **Files Created:**
     - `src/utils/constants.js`
     - `src/utils/helpers.js`
@@ -92,25 +71,23 @@ collabcanvas/
 
 ### Phase 2: Authentication
 
-- [ ] **Task 5: Implement authentication service layer**
+- [ ] **Task 4: Implement authentication service layer**
   - **Files Created:**
     - `src/services/auth.js`
-    - `src/services/__tests__/auth.test.js`
   - **Description:** Create auth functions: signup, login, logout, getCurrentUser, onAuthStateChanged
-  - **Test:** Unit tests for auth service functions with mocked Firebase Auth
 
-- [ ] **Task 6: Build authentication UI components**
+- [ ] **Task 5: Build authentication UI components**
   - **Files Created:**
     - `src/components/AuthForm.jsx`
   - **Files Updated:**
     - `src/App.jsx`
-  - **Description:** Create login/signup form with email/password, handle auth state in App
+  - **Description:** Create login/signup form with email/password. Require authentication before accessing canvas. Handle auth state in App
 
 ---
 
 ### Phase 3: Canvas Infrastructure
 
-- [ ] **Task 7: Create basic canvas component with pan and zoom**
+- [ ] **Task 6: Create basic canvas component with pan and zoom**
   - **Files Created:**
     - `src/components/Canvas.jsx`
     - `src/hooks/useCanvas.js`
@@ -118,7 +95,7 @@ collabcanvas/
     - `src/App.jsx`
   - **Description:** Implement Konva Stage with 5000x5000 workspace, mouse-based pan (drag), and zoom (wheel)
 
-- [ ] **Task 8: Implement shape rendering component**
+- [ ] **Task 7: Implement shape rendering component**
   - **Files Created:**
     - `src/components/Shape.jsx`
   - **Files Updated:**
@@ -129,21 +106,19 @@ collabcanvas/
 
 ### Phase 4: Shape Creation & Manipulation
 
-- [ ] **Task 9: Build shape service layer for Firestore**
+- [ ] **Task 8: Build shape service layer for Firestore**
   - **Files Created:**
     - `src/services/shapes.js`
     - `src/hooks/useShapes.js`
-    - `src/services/__tests__/shapes.test.js`
-  - **Description:** Create CRUD functions: createShape, updateShape, deleteShape, subscribeToShapes
-  - **Test:** Unit tests for shape CRUD operations with mocked Firestore
+  - **Description:** Create CRUD functions: createShape, updateShape, deleteShape, subscribeToShapes, lockShape, unlockShape. All shapes stored in global `/shapes/{shapeId}` collection
 
-- [ ] **Task 10: Implement shape creation on canvas**
+- [ ] **Task 9: Implement shape creation on canvas**
   - **Files Updated:**
     - `src/components/Canvas.jsx`
     - `src/hooks/useShapes.js`
   - **Description:** Add click-to-create or drag-to-create shape functionality, save to Firestore
 
-- [ ] **Task 11: Implement shape dragging and position updates**
+- [ ] **Task 10: Implement shape dragging and position updates**
   - **Files Updated:**
     - `src/components/Shape.jsx`
     - `src/services/shapes.js`
@@ -151,22 +126,25 @@ collabcanvas/
 
 ---
 
-### Phase 5: Real-Time Synchronization
+### Phase 5: Real-Time Synchronization & Object Locking
 
-- [ ] **Task 12: Set up real-time shape sync from Firestore**
+- [ ] **Task 11: Set up real-time shape sync from Firestore**
   - **Files Updated:**
     - `src/hooks/useShapes.js`
     - `src/components/Canvas.jsx`
   - **Description:** Subscribe to Firestore changes, update local state when other users create/modify shapes
 
-- [ ] **Task 13: Test and debug multi-user shape synchronization**
-  - **Files Created:**
-    - `src/__tests__/integration/shapeSync.test.js`
+- [ ] **Task 12: Implement object locking for concurrent edits**
   - **Files Updated:**
     - `src/services/shapes.js`
-    - `src/components/Canvas.jsx`
-  - **Description:** Test with multiple browser windows, fix race conditions, ensure last-write-wins behavior
-  - **Test:** Integration test simulating multiple users creating and updating shapes concurrently
+    - `src/components/Shape.jsx`
+    - `src/hooks/useShapes.js`
+  - **Description:** Add `lockedBy` field to shapes. On dragStart, lock shape to current user. On dragEnd, unlock. Prevent other users from dragging locked shapes. First user to interact gets priority
+
+- [ ] **Task 13: Manual testing of multi-user synchronization**
+  - **Files Updated:**
+    - (Bug fixes as needed)
+  - **Description:** Test with multiple browser tabs/windows. Verify shape creation, movement, and locking work correctly across users
 
 ---
 
@@ -176,9 +154,7 @@ collabcanvas/
   - **Files Created:**
     - `src/services/cursors.js`
     - `src/hooks/useCursors.js`
-    - `src/services/__tests__/cursors.test.js`
-  - **Description:** Create functions to publish cursor position and subscribe to other users' cursors
-  - **Test:** Unit tests for cursor publishing and subscription with mocked Realtime Database
+  - **Description:** Create functions to publish cursor position to `/cursors/{userId}` and subscribe to other users' cursors
 
 - [ ] **Task 15: Implement cursor component and rendering**
   - **Files Created:**
@@ -192,7 +168,7 @@ collabcanvas/
   - **Files Updated:**
     - `src/components/Canvas.jsx`
     - `src/services/cursors.js`
-  - **Description:** Throttle mouse move events and publish to Realtime Database
+  - **Description:** Publish cursor position to Realtime Database on mouse move
 
 ---
 
@@ -202,9 +178,7 @@ collabcanvas/
   - **Files Created:**
     - `src/services/presence.js`
     - `src/hooks/usePresence.js`
-    - `src/services/__tests__/presence.test.js`
-  - **Description:** Track online/offline status using Firebase Realtime Database presence system
-  - **Test:** Unit tests for presence tracking with mocked Realtime Database
+  - **Description:** Track online/offline status at `/presence/{userId}` using Firebase Realtime Database presence system
 
 - [ ] **Task 18: Create presence panel UI component**
   - **Files Created:**
@@ -224,13 +198,10 @@ collabcanvas/
 ### Phase 8: State Persistence & Polish
 
 - [ ] **Task 20: Implement canvas state persistence on load**
-  - **Files Created:**
-    - `src/__tests__/integration/statePersistence.test.js`
   - **Files Updated:**
     - `src/hooks/useShapes.js`
     - `src/components/Canvas.jsx`
-  - **Description:** Load all shapes from Firestore when canvas mounts, handle loading states
-  - **Test:** Integration test verifying shapes persist and reload correctly after page refresh
+  - **Description:** Load all shapes from global Firestore collection when canvas mounts, handle loading states
 
 - [ ] **Task 21: Add reconnection handling and error states**
   - **Files Updated:**
@@ -261,35 +232,40 @@ collabcanvas/
 - [ ] **Task 24: Deploy to production and test with public URL**
   - **Files Updated:**
     - `README.md`
-  - **Description:** Deploy application, verify authentication works, test with 2+ users from different locations
+  - **Description:** Deploy application, verify authentication works, test with 2+ users from different locations accessing the same global canvas
 
-- [ ] **Task 25: Final testing and bug fixes**
+- [ ] **Task 25: Final manual testing and bug fixes**
   - **Files Updated:**
     - (Various files as needed for bug fixes)
-  - **Description:** Multi-user stress test, fix any critical bugs, verify all MVP requirements met
+  - **Description:** Multi-user testing in separate browser tabs/windows. Verify: cursor sync, shape creation/movement, object locking, presence indicators, state persistence. Fix any critical bugs
 
 ---
 
 ## Task Summary
 
 **Total Tasks:** 25
-**Estimated PRs:** 25
+**Testing Approach:** Manual testing in multiple browser tabs/windows
 
 ### Task Breakdown by Phase:
-- Phase 1 (Setup): 4 tasks
+- Phase 1 (Setup): 3 tasks
 - Phase 2 (Auth): 2 tasks
 - Phase 3 (Canvas): 2 tasks
 - Phase 4 (Shapes): 3 tasks
-- Phase 5 (Sync): 2 tasks
+- Phase 5 (Sync & Locking): 3 tasks
 - Phase 6 (Cursors): 3 tasks
 - Phase 7 (Presence): 3 tasks
 - Phase 8 (Polish): 3 tasks
 - Phase 9 (Deploy): 3 tasks
 
 ### Critical Path:
-1. Setup → Auth → Canvas → Shapes → Real-time Sync → Cursors → Presence → Deploy
+1. Setup → Auth → Canvas → Shapes → Real-time Sync → Object Locking → Cursors → Presence → Deploy
+
+### Key Implementation Notes:
+- **Single Global Canvas:** All users access the same `/shapes` collection
+- **Object Locking:** First user to drag a shape locks it; others cannot edit until released
+- **Manual Testing:** Use multiple browser tabs/windows to verify real-time features
+- **No Performance Optimization:** Focus on functionality for MVP
 
 ### Parallel Work Opportunities:
-- Tasks 14-16 (Cursors) can be worked on after Task 12 (Real-time sync) is complete
+- Tasks 14-16 (Cursors) can be worked on after Task 11 (Real-time sync) is complete
 - Tasks 17-19 (Presence) can be worked on in parallel with cursor implementation
-- Task 2 (Testing infrastructure) must be completed before any test-related tasks

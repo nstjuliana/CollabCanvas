@@ -65,7 +65,7 @@ collabcanvas/
     - `FIREBASE_SETUP.md`
   - **Description:** Set up Firebase project (single global canvas), initialize Firestore, Realtime Database, and Auth. Configure environment variables. Firestore path: `/shapes/{shapeId}`, RTDB paths: `/cursors/{userId}`, `/presence/{userId}`
 
-- [ ] **Task 3: Set up project constants and utilities**
+- [x] **Task 3: Set up project constants and utilities**
   - **Files Created:**
     - `src/utils/constants.js`
     - `src/utils/helpers.js`

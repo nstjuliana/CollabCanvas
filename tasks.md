@@ -54,11 +54,15 @@ collabcanvas/
     - `README.md`
   - **Description:** Create React app, install Firebase SDK, Konva.js, and React-Konva
 
-- [ ] **Task 2: Configure Firebase project and environment variables**
+- [x] **Task 2: Configure Firebase project and environment variables**
   - **Files Created:**
     - `src/services/firebase.js`
     - `.env.example`
     - `firebase.json`
+    - `firestore.rules`
+    - `firestore.indexes.json`
+    - `database.rules.json`
+    - `FIREBASE_SETUP.md`
   - **Description:** Set up Firebase project (single global canvas), initialize Firestore, Realtime Database, and Auth. Configure environment variables. Firestore path: `/shapes/{shapeId}`, RTDB paths: `/cursors/{userId}`, `/presence/{userId}`
 
 - [ ] **Task 3: Set up project constants and utilities**

@@ -113,7 +113,7 @@ collabcanvas/
 
 ### Phase 4: Shape Creation & Manipulation
 
-- [ ] **Task 8: Build shape service layer for Firestore**
+- [x] **Task 8: Build shape service layer for Firestore**
   - **Files Created:**
     - `src/services/shapes.js`
     - `src/hooks/useShapes.js`

@@ -236,7 +236,7 @@ collabcanvas/
 
 ### Phase 9: Deployment
 
-- [ ] **Task 23: Configure deployment settings for Vercel/Firebase Hosting**
+- [x] **Task 23: Configure deployment settings for Vercel/Firebase Hosting**
   - **Files Created:**
     - `vercel.json` (if using Vercel)
   - **Files Updated:**
@@ -244,12 +244,12 @@ collabcanvas/
     - `README.md`
   - **Description:** Set up build configuration, environment variables for production
 
-- [ ] **Task 24: Deploy to production and test with public URL**
+- [x] **Task 24: Deploy to production and test with public URL**
   - **Files Updated:**
     - `README.md`
   - **Description:** Deploy application, verify authentication works, test with 2+ users from different locations accessing the same global canvas
 
-- [ ] **Task 25: Final manual testing and bug fixes**
+- [x] **Task 25: Final manual testing and bug fixes**
   - **Files Updated:**
     - (Various files as needed for bug fixes)
   - **Description:** Multi-user testing in separate browser tabs/windows. Verify: cursor sync, shape creation/movement, object locking, presence indicators, state persistence. Fix any critical bugs

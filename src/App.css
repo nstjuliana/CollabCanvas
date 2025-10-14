@@ -93,6 +93,14 @@
   transform: scale(0.98);
 }
 
+/* Content Container */
+.app-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0; /* Important for flex child to shrink properly */
+}
+
 /* Main Content */
 .app-main {
   flex: 1;

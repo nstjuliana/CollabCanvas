@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react';
 import { onAuthStateChanged, logout } from './services/auth';
+import { cleanupCursor } from './services/cursors';
+import { cleanupPresence } from './services/presence';
 import AuthForm from './components/AuthForm';
 import Canvas from './components/Canvas';
+import PresencePanel from './components/PresencePanel';
 import './App.css';
 
 function App() {
@@ -21,6 +24,14 @@ function App() {
 
   const handleLogout = async () => {
     try {
+      // Clean up cursor and presence data BEFORE signing out
+      // This ensures getUserId() still returns the user's ID during cleanup
+      await Promise.all([
+        cleanupCursor(),
+        cleanupPresence()
+      ]);
+      
+      // Now sign out
       await logout();
     } catch (error) {
       console.error('Logout error:', error);
@@ -54,9 +65,12 @@ function App() {
           </button>
         </div>
       </header>
-      <main className="app-main">
-        <Canvas />
-      </main>
+      <div className="app-content">
+        <main className="app-main">
+          <Canvas />
+        </main>
+        <PresencePanel />
+      </div>
     </div>
   );
 }

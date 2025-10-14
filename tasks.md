@@ -184,22 +184,25 @@ collabcanvas/
 
 ### Phase 7: Presence Awareness
 
-- [ ] **Task 17: Build presence service layer**
+- [x] **Task 17: Build presence service layer**
   - **Files Created:**
     - `src/services/presence.js`
     - `src/hooks/usePresence.js`
   - **Description:** Track online/offline status at `/presence/{userId}` using Firebase Realtime Database presence system
 
-- [ ] **Task 18: Create presence panel UI component**
+- [x] **Task 18: Create presence panel UI component**
   - **Files Created:**
     - `src/components/PresencePanel.jsx`
+    - `src/components/PresencePanel.css`
   - **Files Updated:**
     - `src/App.jsx`
+    - `src/App.css`
   - **Description:** Display list of currently online users with visual indicators
 
-- [ ] **Task 19: Connect presence to auth and cleanup on disconnect**
+- [x] **Task 19: Connect presence to auth and cleanup on disconnect**
   - **Files Updated:**
     - `src/services/presence.js`
+    - `src/hooks/usePresence.js`
     - `src/App.jsx`
   - **Description:** Set user online on login, handle disconnection, clean up presence data
 

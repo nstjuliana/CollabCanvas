@@ -119,29 +119,32 @@ collabcanvas/
     - `src/hooks/useShapes.js`
   - **Description:** Create CRUD functions: createShape, updateShape, deleteShape, subscribeToShapes, lockShape, unlockShape. All shapes stored in global `/shapes/{shapeId}` collection
 
-- [ ] **Task 9: Implement shape creation on canvas**
+- [x] **Task 9: Implement shape creation on canvas**
   - **Files Updated:**
     - `src/components/Canvas.jsx`
-    - `src/hooks/useShapes.js`
+    - `src/components/Canvas.css`
   - **Description:** Add click-to-create or drag-to-create shape functionality, save to Firestore
 
-- [ ] **Task 10: Implement shape dragging and position updates**
+- [x] **Task 10: Implement shape dragging and position updates**
   - **Files Updated:**
     - `src/components/Shape.jsx`
     - `src/services/shapes.js`
+    - `src/components/Canvas.jsx`
+    - `src/hooks/useShapes.js`
   - **Description:** Enable drag interaction on shapes, update position in Firestore on dragEnd
 
 ---
 
 ### Phase 5: Real-Time Synchronization & Object Locking
 
-- [ ] **Task 11: Set up real-time shape sync from Firestore**
+- [x] **Task 11: Set up real-time shape sync from Firestore**
   - **Files Updated:**
     - `src/hooks/useShapes.js`
     - `src/components/Canvas.jsx`
+    - `src/services/shapes.js`
   - **Description:** Subscribe to Firestore changes, update local state when other users create/modify shapes
 
-- [ ] **Task 12: Implement object locking for concurrent edits**
+- [x] **Task 12: Implement object locking for concurrent edits**
   - **Files Updated:**
     - `src/services/shapes.js`
     - `src/components/Shape.jsx`

@@ -43,9 +43,9 @@ function Shape({
     x,
     y,
     fill,
-    stroke: isSelected ? '#0066ff' : stroke,
+    stroke: isSelected ? '#0066ff' : (isLocked ? '#999999' : stroke),
     strokeWidth: isSelected ? strokeWidth + 2 : strokeWidth,
-    opacity: isLocked ? opacity * 0.6 : opacity,
+    opacity: isLocked ? opacity * 0.5 : opacity,
     rotation,
     draggable: !isLocked,
     onDragStart: (e) => {
@@ -84,8 +84,10 @@ function Shape({
     shadowOpacity: isSelected ? 0.5 : 0,
     // Cursor styling
     onMouseEnter: (e) => {
-      if (!isLocked) {
-        const container = e.target.getStage().container();
+      const container = e.target.getStage().container();
+      if (isLocked) {
+        container.style.cursor = 'not-allowed';
+      } else {
         container.style.cursor = 'move';
       }
     },

@@ -3,7 +3,8 @@ import { Stage, Layer, Rect, Text } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
 import Shape from './Shape';
-import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL } from '../utils/constants';
+import ColorPicker from './ColorPicker';
+import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL, DEFAULT_SHAPE_COLOR } from '../utils/constants';
 import { screenToCanvas, getRandomColor } from '../utils/helpers';
 import './Canvas.css';
 
@@ -26,8 +27,10 @@ function Canvas() {
     error,
     selectedShapeId,
     createShape,
+    updateShape,
     deleteShape,
     clearAllShapes,
+    selectShape,
     isLockedByOther,
     handleDragStart: handleShapeDragStart,
     handleDragEnd: handleShapeDragEnd,
@@ -40,6 +43,7 @@ function Canvas() {
   });
   
   const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_SHAPE_COLOR);
 
   // Handle window resize and measure container
   useEffect(() => {
@@ -106,7 +110,7 @@ function Canvas() {
           y: canvasPos.y,
           width: SHAPE_DEFAULTS.WIDTH, // Width is used as diameter
           height: SHAPE_DEFAULTS.HEIGHT,
-          fill: getRandomColor(SHAPE_COLORS),
+          fill: selectedColor,
           stroke: '#333333',
           strokeWidth: SHAPE_DEFAULTS.STROKE_WIDTH,
           opacity: SHAPE_DEFAULTS.OPACITY,
@@ -120,7 +124,7 @@ function Canvas() {
           y: canvasPos.y - SHAPE_DEFAULTS.HEIGHT / 2,
           width: SHAPE_DEFAULTS.WIDTH,
           height: SHAPE_DEFAULTS.HEIGHT,
-          fill: getRandomColor(SHAPE_COLORS),
+          fill: selectedColor,
           stroke: '#333333',
           strokeWidth: SHAPE_DEFAULTS.STROKE_WIDTH,
           cornerRadius: 5,
@@ -179,6 +183,50 @@ function Canvas() {
       } catch (err) {
         console.error('Failed to delete shape:', err);
       }
+    } else {
+      // Otherwise, select the shape for color editing
+      if (isLockedByOther(shape.id)) {
+        console.log('Cannot select - shape is locked by another user');
+        return;
+      }
+      
+      selectShape(shape.id);
+      setSelectedColor(shape.fill);
+      console.log('Shape selected:', shape.id);
+    }
+  };
+
+  /**
+   * Handle color change from color picker
+   */
+  const handleColorChange = async (newColor) => {
+    setSelectedColor(newColor);
+    
+    // If a shape is selected, update its color
+    if (selectedShapeId) {
+      const shape = shapes.find(s => s.id === selectedShapeId);
+      if (shape && !isLockedByOther(selectedShapeId)) {
+        try {
+          await updateShape(selectedShapeId, { fill: newColor });
+          console.log('Shape color updated:', selectedShapeId, newColor);
+        } catch (err) {
+          console.error('Failed to update shape color:', err);
+        }
+      }
+    }
+  };
+
+  /**
+   * Handle canvas click to deselect shapes
+   */
+  const handleCanvasClick = (e) => {
+    // Check if we clicked on a user-created shape (they have string IDs matching Firestore)
+    const clickedOnShape = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string' && shapes.some(s => s.id === e.target.attrs.id);
+    
+    // If we didn't click on a shape and have a selection, deselect it
+    if (!clickedOnShape && selectedShapeId) {
+      selectShape(null);
+      console.log('Shape deselected');
     }
   };
 
@@ -230,6 +278,14 @@ function Canvas() {
         
         <div className="toolbar-divider"></div>
         
+        <ColorPicker
+          selectedColor={selectedColor}
+          onColorChange={handleColorChange}
+          disabled={false}
+        />
+        
+        <div className="toolbar-divider"></div>
+        
         <button
           onClick={handleClearCanvas}
           className="toolbar-button"
@@ -278,7 +334,9 @@ function Canvas() {
           🖱️ Drag to pan • 🖲️ Scroll to zoom • 
           {selectedTool === TOOL_TYPES.DELETE 
             ? ' Click shapes to delete' 
-            : ` Double-click to create ${selectedTool}`}
+            : selectedShapeId
+            ? ' Selected shape - change color in toolbar'
+            : ` Double-click to create ${selectedTool} • Click shapes to edit`}
         </p>
       </div>
 
@@ -301,6 +359,7 @@ function Canvas() {
         onDragStart={handleCanvasDragStart}
         onDragEnd={handleCanvasDragEnd}
         onDblClick={handleCanvasDoubleClick}
+        onClick={handleCanvasClick}
         className={isDragging ? 'dragging' : ''}
       >
         {/* Background Layer */}

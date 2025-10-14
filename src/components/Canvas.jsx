@@ -354,8 +354,15 @@ function Canvas() {
 
       // For rectangles, update width and height
       if (shape.type === SHAPE_TYPES.RECTANGLE) {
-        updates.width = node.width() * node.scaleX();
-        updates.height = node.height() * node.scaleY();
+        const newWidth = node.width() * node.scaleX();
+        const newHeight = node.height() * node.scaleY();
+        
+        updates.width = newWidth;
+        updates.height = newHeight;
+        
+        // Update the node's dimensions immediately to prevent flicker
+        node.width(newWidth);
+        node.height(newHeight);
         
         // Reset scale to 1 after applying it to width/height
         node.scaleX(1);
@@ -363,8 +370,14 @@ function Canvas() {
       } else if (shape.type === SHAPE_TYPES.CIRCLE) {
         // For circles, update the radius (width is diameter)
         const newRadius = (node.width() * node.scaleX()) / 2;
-        updates.width = newRadius * 2;
-        updates.height = newRadius * 2;
+        const newDiameter = newRadius * 2;
+        
+        updates.width = newDiameter;
+        updates.height = newDiameter;
+        
+        // Update the node's dimensions immediately to prevent flicker
+        node.width(newDiameter);
+        node.height(newDiameter);
         
         // Reset scale to 1
         node.scaleX(1);

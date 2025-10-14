@@ -48,8 +48,16 @@ function useShapes() {
         console.log('Cleaning up shapes subscription');
         unsubscribeRef.current();
       }
+      
+      // Unlock any selected shape on cleanup
+      if (selectedShapeId) {
+        console.log('Unlocking selected shape on unmount');
+        unlockShapeService(selectedShapeId).catch(err => 
+          console.error('Error unlocking shape on cleanup:', err)
+        );
+      }
     };
-  }, []);
+  }, [selectedShapeId]);
 
   /**
    * Create a new shape
@@ -155,12 +163,45 @@ function useShapes() {
   }, []);
 
   /**
-   * Select a shape
+   * Select a shape and lock it
    * @param {string|null} shapeId - Shape ID to select, or null to deselect
    */
-  const selectShape = useCallback((shapeId) => {
-    setSelectedShapeId(shapeId);
-  }, []);
+  const selectShape = useCallback(async (shapeId) => {
+    try {
+      // If deselecting (shapeId is null), unlock the previously selected shape
+      if (shapeId === null && selectedShapeId) {
+        await unlockShapeService(selectedShapeId);
+        setSelectedShapeId(null);
+        return;
+      }
+
+      // If selecting the same shape, do nothing
+      if (shapeId === selectedShapeId) {
+        return;
+      }
+
+      // Unlock previously selected shape if there is one
+      if (selectedShapeId && selectedShapeId !== shapeId) {
+        await unlockShapeService(selectedShapeId);
+      }
+
+      // Lock the newly selected shape
+      if (shapeId) {
+        const success = await lockShapeService(shapeId);
+        if (success) {
+          setSelectedShapeId(shapeId);
+        } else {
+          console.log('Could not lock shape for selection');
+          setSelectedShapeId(null);
+        }
+      } else {
+        setSelectedShapeId(null);
+      }
+    } catch (err) {
+      console.error('Error in selectShape:', err);
+      setSelectedShapeId(null);
+    }
+  }, [selectedShapeId]);
 
   /**
    * Check if a shape is locked by another user
@@ -194,7 +235,7 @@ function useShapes() {
   }, [shapes]);
 
   /**
-   * Handle shape drag start - lock the shape
+   * Handle shape drag start - lock the shape if not already locked
    * @param {string} shapeId - Shape ID
    * @returns {Promise<boolean>} True if shape was locked successfully
    */
@@ -205,16 +246,23 @@ function useShapes() {
       return false;
     }
 
-    // Lock the shape
+    // If shape is already locked by us (from selection), just return success
+    if (isLockedByMe(shapeId)) {
+      console.log('Shape already locked by current user');
+      return true;
+    }
+
+    // Lock the shape and select it
     const success = await lockShape(shapeId);
     if (success) {
-      selectShape(shapeId);
+      // Use setSelectedShapeId directly to avoid the async selectShape logic
+      setSelectedShapeId(shapeId);
     }
     return success;
-  }, [isLockedByOther, lockShape, selectShape]);
+  }, [isLockedByOther, isLockedByMe, lockShape]);
 
   /**
-   * Handle shape drag end - update position and unlock
+   * Handle shape drag end - update position
    * @param {string} shapeId - Shape ID
    * @param {number} x - New x position
    * @param {number} y - New y position
@@ -225,17 +273,15 @@ function useShapes() {
       // Update position in Firestore
       await updateShape(shapeId, { x, y });
       
-      // Unlock the shape
-      await unlockShape(shapeId);
+      // Don't unlock - the shape remains selected and locked
+      // It will be unlocked when the user deselects it
       
-      // Keep shape selected after dragging
-      // (no deselection here)
+      console.log('Shape position updated after drag');
     } catch (err) {
       console.error('Error handling drag end:', err);
-      // Still try to unlock even if update failed
-      await unlockShape(shapeId);
+      // If update failed, still keep the lock since it's selected
     }
-  }, [updateShape, unlockShape]);
+  }, [updateShape]);
 
   return {
     // State

@@ -442,14 +442,12 @@ function Canvas() {
       // Update shape in Firestore
       await updateShape(selectedShapeId, updates);
       
-      // Unlock the shape
-      await unlockShape(selectedShapeId);
+      // Don't unlock - the shape remains selected and locked
       
       console.log('Shape transformed:', selectedShapeId, updates);
     } catch (err) {
       console.error('Failed to update shape after transform:', err);
-      // Still unlock on error
-      await unlockShape(selectedShapeId);
+      // Don't unlock on error - shape remains selected
     } finally {
       // Mark that we're done transforming
       isDraggingShapeRef.current = false;

@@ -224,7 +224,7 @@ collabcanvas/
     - `src/utils/helpers.js`
   - **Description:** Handle Firebase connection errors, show user feedback for offline/reconnecting states. Added connection monitoring, offline banner, and reconnection toast notifications.
 
-- [ ] **Task 22: Polish UI/UX and add basic styling**
+- [x] **Task 22: Polish UI/UX and add basic styling**
   - **Files Updated:**
     - `src/index.css`
     - `src/components/Canvas.jsx`

@@ -109,6 +109,35 @@ function Canvas() {
     };
   }, []);
 
+  // Handle keyboard events (Delete key to delete selected shape)
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      // Delete or Backspace key
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
+        // Don't delete if user is typing in an input field
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        // Check if shape is locked
+        if (isLockedByOther(selectedShapeId)) {
+          console.log('Cannot delete - shape is locked by another user');
+          return;
+        }
+
+        try {
+          await deleteShape(selectedShapeId);
+          console.log('Shape deleted with keyboard:', selectedShapeId);
+        } catch (err) {
+          console.error('Failed to delete shape:', err);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedShapeId, isLockedByOther, deleteShape]);
+
   /**
    * Handle double-click on canvas to create a new shape
    */
@@ -677,13 +706,6 @@ function Canvas() {
               'middle-left', 'middle-right',
               'bottom-left', 'bottom-center', 'bottom-right'
             ]}
-            boundBoxFunc={(oldBox, newBox) => {
-              // Limit minimum size
-              if (newBox.width < 20 || newBox.height < 20) {
-                return oldBox;
-              }
-              return newBox;
-            }}
           />
         </Layer>
 

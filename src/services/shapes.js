@@ -15,6 +15,8 @@ import {
   query,
   orderBy,
   getDoc,
+  getDocs,
+  writeBatch,
   Timestamp,
 } from 'firebase/firestore';
 import { db, COLLECTIONS } from './firebase';
@@ -341,6 +343,44 @@ export async function unlockAllMyShapes() {
     // For MVP, we'll rely on manual cleanup and lock timeouts
   } catch (error) {
     console.error('Error unlocking all shapes:', error);
+  }
+}
+
+/**
+ * Clear all shapes from the canvas (delete all shapes)
+ * Uses batch writes for efficiency
+ * @returns {Promise<void>}
+ */
+export async function clearAllShapes() {
+  try {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error('User must be authenticated to clear shapes');
+    }
+
+    // Get all shapes
+    const shapesRef = collection(db, COLLECTIONS.SHAPES);
+    const snapshot = await getDocs(shapesRef);
+
+    if (snapshot.empty) {
+      console.log('No shapes to clear');
+      return;
+    }
+
+    // Use batch write for efficiency (max 500 operations per batch)
+    const batch = writeBatch(db);
+    let count = 0;
+
+    snapshot.forEach((doc) => {
+      batch.delete(doc.ref);
+      count++;
+    });
+
+    await batch.commit();
+    console.log(`Cleared ${count} shapes from canvas`);
+  } catch (error) {
+    console.error('Error clearing shapes:', error);
+    throw new Error(`Failed to clear shapes: ${error.message}`);
   }
 }
 

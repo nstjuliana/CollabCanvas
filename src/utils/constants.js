@@ -32,6 +32,16 @@ export const SHAPE_TYPES = {
 // Default shape type for MVP
 export const DEFAULT_SHAPE_TYPE = SHAPE_TYPES.RECTANGLE;
 
+// Tool Types (for toolbar)
+export const TOOL_TYPES = {
+  RECTANGLE: 'rectangle',
+  CIRCLE: 'circle',
+  DELETE: 'delete',
+};
+
+// Default tool
+export const DEFAULT_TOOL = TOOL_TYPES.RECTANGLE;
+
 // Predefined colors for shapes
 export const SHAPE_COLORS = [
   '#FF6B6B', // Red

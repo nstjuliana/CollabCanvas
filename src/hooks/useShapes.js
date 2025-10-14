@@ -8,6 +8,7 @@ import {
   createShape as createShapeService,
   updateShape as updateShapeService,
   deleteShape as deleteShapeService,
+  clearAllShapes as clearAllShapesService,
   subscribeToShapes,
   lockShape as lockShapeService,
   unlockShape as unlockShapeService,
@@ -104,6 +105,22 @@ function useShapes() {
       throw err;
     }
   }, [selectedShapeId]);
+
+  /**
+   * Clear all shapes from the canvas
+   * @returns {Promise<void>}
+   */
+  const clearAllShapes = useCallback(async () => {
+    try {
+      setError(null);
+      await clearAllShapesService();
+      setSelectedShapeId(null);
+    } catch (err) {
+      console.error('Error clearing shapes:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, []);
 
   /**
    * Lock a shape for editing
@@ -231,6 +248,7 @@ function useShapes() {
     createShape,
     updateShape,
     deleteShape,
+    clearAllShapes,
     lockShape,
     unlockShape,
     selectShape,

@@ -3,7 +3,7 @@ import { Stage, Layer, Rect, Text } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
 import Shape from './Shape';
-import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS } from '../utils/constants';
+import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL } from '../utils/constants';
 import { screenToCanvas, getRandomColor } from '../utils/helpers';
 import './Canvas.css';
 
@@ -26,6 +26,8 @@ function Canvas() {
     error,
     selectedShapeId,
     createShape,
+    deleteShape,
+    clearAllShapes,
     isLockedByOther,
     handleDragStart: handleShapeDragStart,
     handleDragEnd: handleShapeDragEnd,
@@ -37,7 +39,7 @@ function Canvas() {
     height: window.innerHeight,
   });
   
-  const [selectedTool, setSelectedTool] = useState(SHAPE_TYPES.RECTANGLE);
+  const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
 
   // Handle window resize and measure container
   useEffect(() => {
@@ -70,6 +72,11 @@ function Canvas() {
    * Handle double-click on canvas to create a new shape
    */
   const handleCanvasDoubleClick = async (e) => {
+    // Don't create shapes when delete tool is active
+    if (selectedTool === TOOL_TYPES.DELETE) {
+      return;
+    }
+
     // Ignore if clicking on a user-created shape
     // Shapes have an 'id' attribute that matches our Firestore shape IDs
     const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
@@ -91,7 +98,7 @@ function Canvas() {
     try {
       let newShape;
       
-      if (selectedTool === SHAPE_TYPES.CIRCLE) {
+      if (selectedTool === TOOL_TYPES.CIRCLE) {
         // For circles, x/y is the center point, so use canvasPos directly
         newShape = {
           type: SHAPE_TYPES.CIRCLE,
@@ -153,65 +160,126 @@ function Canvas() {
     await handleShapeDragEnd(shape.id, node.x(), node.y());
   };
 
+  /**
+   * Handle shape click
+   */
+  const onShapeClick = async (e, shape) => {
+    e.cancelBubble = true; // Prevent canvas click
+    
+    // If delete tool is active, delete the shape
+    if (selectedTool === TOOL_TYPES.DELETE) {
+      if (isLockedByOther(shape.id)) {
+        console.log('Cannot delete - shape is locked by another user');
+        return;
+      }
+      
+      try {
+        await deleteShape(shape.id);
+        console.log('Shape deleted:', shape.id);
+      } catch (err) {
+        console.error('Failed to delete shape:', err);
+      }
+    }
+  };
+
+  /**
+   * Handle clear canvas button click
+   */
+  const handleClearCanvas = async () => {
+    if (shapes.length === 0) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to clear all ${shapes.length} shape${shapes.length !== 1 ? 's' : ''} from the canvas? This action cannot be undone.`
+    );
+    
+    if (confirmed) {
+      try {
+        await clearAllShapes();
+        console.log('Canvas cleared');
+      } catch (err) {
+        console.error('Failed to clear canvas:', err);
+      }
+    }
+  };
+
   return (
     <div className="canvas-wrapper" ref={containerRef}>
-      {/* Canvas Controls */}
-      <div className="canvas-controls">
-        <div className="control-group">
-          <button
-            onClick={resetCanvas}
-            className="control-button"
-            title="Reset View"
-          >
-            🔄 Reset
-          </button>
-          <button
-            onClick={fitToView}
-            className="control-button"
-            title="Fit to View"
-          >
-            ⛶ Fit
-          </button>
-        </div>
+      {/* Unified Toolbar */}
+      <div className="toolbar">
+        <button
+          onClick={() => setSelectedTool(TOOL_TYPES.RECTANGLE)}
+          className={`toolbar-button ${selectedTool === TOOL_TYPES.RECTANGLE ? 'active' : ''}`}
+          title="Rectangle Tool (Double-click to create)"
+        >
+          ▭
+        </button>
+        <button
+          onClick={() => setSelectedTool(TOOL_TYPES.CIRCLE)}
+          className={`toolbar-button ${selectedTool === TOOL_TYPES.CIRCLE ? 'active' : ''}`}
+          title="Circle Tool (Double-click to create)"
+        >
+          ⬤
+        </button>
+        <button
+          onClick={() => setSelectedTool(TOOL_TYPES.DELETE)}
+          className={`toolbar-button ${selectedTool === TOOL_TYPES.DELETE ? 'active' : ''}`}
+          title="Delete Tool (Click shapes to delete)"
+        >
+          🗑️
+        </button>
         
-        <div className="control-group">
-          <button
-            onClick={() => setSelectedTool(SHAPE_TYPES.RECTANGLE)}
-            className={`control-button ${selectedTool === SHAPE_TYPES.RECTANGLE ? 'active' : ''}`}
-            title="Rectangle Tool"
-          >
-            ▭ Rectangle
-          </button>
-          <button
-            onClick={() => setSelectedTool(SHAPE_TYPES.CIRCLE)}
-            className={`control-button ${selectedTool === SHAPE_TYPES.CIRCLE ? 'active' : ''}`}
-            title="Circle Tool"
-          >
-            ⬤ Circle
-          </button>
-        </div>
+        <div className="toolbar-divider"></div>
         
-        <div className="zoom-indicator">
-          <span className="zoom-label">Zoom:</span>
+        <button
+          onClick={handleClearCanvas}
+          className="toolbar-button"
+          disabled={shapes.length === 0}
+          title={shapes.length === 0 ? "No shapes to clear" : "Clear all shapes from canvas"}
+        >
+          💣
+        </button>
+        <button
+          onClick={resetCanvas}
+          className="toolbar-button"
+          title="Reset View"
+        >
+          🔄
+        </button>
+        <button
+          onClick={fitToView}
+          className="toolbar-button"
+          title="Fit to View"
+        >
+          ⛶
+        </button>
+        
+        <div className="toolbar-divider"></div>
+        
+        <div className="toolbar-info">
           <span className="zoom-value">{Math.round(stageScale * 100)}%</span>
         </div>
 
         {loading && (
-          <div className="status-indicator loading">
-            <span>Loading...</span>
+          <div className="toolbar-status loading">
+            <span>⏳</span>
           </div>
         )}
 
         {error && (
-          <div className="status-indicator error">
-            <span title={error}>⚠️ Error</span>
+          <div className="toolbar-status error" title={error}>
+            <span>⚠️</span>
           </div>
         )}
       </div>
 
       {/* Canvas Instructions */}
       <div className="canvas-instructions">
-        <p>🖱️ Drag to pan • 🖲️ Scroll to zoom • Double-click to create {selectedTool}</p>
+        <p>
+          🖱️ Drag to pan • 🖲️ Scroll to zoom • 
+          {selectedTool === TOOL_TYPES.DELETE 
+            ? ' Click shapes to delete' 
+            : ` Double-click to create ${selectedTool}`}
+        </p>
       </div>
 
       {/* Shape Count */}
@@ -323,6 +391,7 @@ function Canvas() {
               isLocked={isLockedByOther(shape.id)}
               onDragStart={onShapeDragStart}
               onDragEnd={onShapeDragEnd}
+              onClick={onShapeClick}
             />
           ))}
         </Layer>

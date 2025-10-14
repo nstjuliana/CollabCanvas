@@ -69,12 +69,12 @@ function Shape({
       }
     },
     onClick: (e) => {
-      if (onClick && !isLocked) {
+      if (onClick) {
         onClick(e, shapeData);
       }
     },
     onTap: (e) => {
-      if (onClick && !isLocked) {
+      if (onClick) {
         onClick(e, shapeData);
       }
     },

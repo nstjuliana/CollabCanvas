@@ -2,7 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { Stage, Layer, Rect, Text, Transformer } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
+import useCursors from '../hooks/useCursors';
 import Shape from './Shape';
+import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
 import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL, DEFAULT_SHAPE_COLOR } from '../utils/constants';
 import { screenToCanvas, getRandomColor } from '../utils/helpers';
@@ -36,6 +38,12 @@ function Canvas() {
     handleDragStart: handleShapeDragStart,
     handleDragEnd: handleShapeDragEnd,
   } = useShapes();
+
+  const {
+    cursorsList,
+    updateCursorPosition,
+    activeCursorCount,
+  } = useCursors();
 
   const containerRef = useRef(null);
   const transformerRef = useRef(null);
@@ -285,6 +293,24 @@ function Canvas() {
   };
 
   /**
+   * Handle mouse move to update cursor position
+   */
+  const handleMouseMove = (e) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    // Get pointer position in screen coordinates
+    const pointerPosition = stage.getPointerPosition();
+    if (!pointerPosition) return;
+
+    // Convert to canvas coordinates
+    const canvasPos = screenToCanvas(stage, pointerPosition);
+    
+    // Update cursor position in Realtime Database (throttled in hook)
+    updateCursorPosition(canvasPos.x, canvasPos.y);
+  };
+
+  /**
    * Handle clear canvas button click
    */
   const handleClearCanvas = async () => {
@@ -368,16 +394,16 @@ function Canvas() {
         node.scaleX(1);
         node.scaleY(1);
       } else if (shape.type === SHAPE_TYPES.CIRCLE) {
-        // For circles, update the radius (width is diameter)
-        const newRadius = (node.width() * node.scaleX()) / 2;
-        const newDiameter = newRadius * 2;
+        // For circles, allow ellipse transformation (independent width/height)
+        const newWidth = node.width() * node.scaleX();
+        const newHeight = node.height() * node.scaleY();
         
-        updates.width = newDiameter;
-        updates.height = newDiameter;
+        updates.width = newWidth;
+        updates.height = newHeight;
         
         // Update the node's dimensions immediately to prevent flicker
-        node.width(newDiameter);
-        node.height(newDiameter);
+        node.width(newWidth);
+        node.height(newHeight);
         
         // Reset scale to 1
         node.scaleX(1);
@@ -410,12 +436,13 @@ function Canvas() {
     <div className="canvas-wrapper" ref={containerRef}>
       {/* Unified Toolbar */}
       <div className="toolbar">
+        {/* Shapes */}
         <button
           onClick={() => setSelectedTool(TOOL_TYPES.RECTANGLE)}
           className={`toolbar-button ${selectedTool === TOOL_TYPES.RECTANGLE ? 'active' : ''}`}
           title="Rectangle Tool (Double-click to create)"
         >
-          ▭
+          ■
         </button>
         <button
           onClick={() => setSelectedTool(TOOL_TYPES.CIRCLE)}
@@ -424,16 +451,10 @@ function Canvas() {
         >
           ⬤
         </button>
-        <button
-          onClick={() => setSelectedTool(TOOL_TYPES.DELETE)}
-          className={`toolbar-button ${selectedTool === TOOL_TYPES.DELETE ? 'active' : ''}`}
-          title="Delete Tool (Click shapes to delete)"
-        >
-          🗑️
-        </button>
         
         <div className="toolbar-divider"></div>
         
+        {/* Color Picker */}
         <ColorPicker
           selectedColor={selectedColor}
           onColorChange={handleColorChange}
@@ -442,6 +463,14 @@ function Canvas() {
         
         <div className="toolbar-divider"></div>
         
+        {/* Deletion Tools */}
+        <button
+          onClick={() => setSelectedTool(TOOL_TYPES.DELETE)}
+          className={`toolbar-button ${selectedTool === TOOL_TYPES.DELETE ? 'active' : ''}`}
+          title="Delete Tool (Click shapes to delete)"
+        >
+          🗑️
+        </button>
         <button
           onClick={handleClearCanvas}
           className="toolbar-button"
@@ -450,6 +479,10 @@ function Canvas() {
         >
           💣
         </button>
+        
+        <div className="toolbar-divider"></div>
+        
+        {/* Zoom Settings */}
         <button
           onClick={resetCanvas}
           className="toolbar-button"
@@ -499,6 +532,11 @@ function Canvas() {
       {/* Shape Count */}
       <div className="shape-count">
         <span>{shapes.length} shape{shapes.length !== 1 ? 's' : ''}</span>
+        {activeCursorCount > 0 && (
+          <span className="cursor-count">
+            • {activeCursorCount} user{activeCursorCount !== 1 ? 's' : ''} online
+          </span>
+        )}
       </div>
 
       {/* Konva Stage */}
@@ -512,6 +550,7 @@ function Canvas() {
         scaleY={stageScale}
         draggable={true}
         onWheel={handleWheel}
+        onMouseMove={handleMouseMove}
         onDragStart={(e) => {
           // Only allow canvas drag if we're not dragging a shape
           if (!isDraggingShapeRef.current) {
@@ -633,7 +672,11 @@ function Canvas() {
             onTransformStart={handleTransformStart}
             onTransformEnd={handleTransformEnd}
             rotateEnabled={true}
-            enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+            enabledAnchors={[
+              'top-left', 'top-center', 'top-right',
+              'middle-left', 'middle-right',
+              'bottom-left', 'bottom-center', 'bottom-right'
+            ]}
             boundBoxFunc={(oldBox, newBox) => {
               // Limit minimum size
               if (newBox.width < 20 || newBox.height < 20) {
@@ -642,6 +685,13 @@ function Canvas() {
               return newBox;
             }}
           />
+        </Layer>
+
+        {/* Cursors Layer - rendered on top of shapes */}
+        <Layer listening={false}>
+          {cursorsList.map((cursor) => (
+            <Cursor key={cursor.userId} cursor={cursor} stageScale={stageScale} />
+          ))}
         </Layer>
       </Stage>
     </div>

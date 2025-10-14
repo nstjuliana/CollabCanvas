@@ -1,4 +1,4 @@
-import { Rect, Circle } from 'react-konva';
+import { Rect, Ellipse } from 'react-konva';
 import { SHAPE_TYPES, SHAPE_DEFAULTS } from '../utils/constants';
 
 /**
@@ -104,9 +104,10 @@ function Shape({
   switch (type) {
     case SHAPE_TYPES.CIRCLE:
       return (
-        <Circle
+        <Ellipse
           {...commonProps}
-          radius={width / 2} // Use width as diameter
+          radiusX={width / 2}  // Horizontal radius
+          radiusY={height / 2} // Vertical radius (allows ellipse)
         />
       );
 

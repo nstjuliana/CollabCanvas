@@ -18,6 +18,7 @@
   left: 1rem;
   z-index: 10;
   display: flex;
+  flex-direction: column;
   gap: 0.25rem;
   align-items: center;
   background: white;
@@ -69,23 +70,24 @@
 }
 
 .toolbar-divider {
-  width: 1px;
-  height: 30px;
+  width: 30px;
+  height: 1px;
   background: #e0e0e0;
-  margin: 0 0.25rem;
+  margin: 0.25rem 0;
 }
 
 .toolbar-info {
   display: flex;
   align-items: center;
-  padding: 0 0.5rem;
-  font-size: 0.9rem;
+  justify-content: center;
+  padding: 0.25rem 0;
+  font-size: 0.85rem;
 }
 
 .zoom-value {
   color: #667eea;
   font-weight: 600;
-  min-width: 45px;
+  min-width: 40px;
   text-align: center;
 }
 
@@ -142,6 +144,12 @@
   font-weight: 500;
 }
 
+.cursor-count {
+  margin-left: 0.5rem;
+  color: #667eea;
+  font-weight: 600;
+}
+
 
 /* Konva Stage */
 .konvajs-content {
@@ -158,14 +166,17 @@
   .toolbar {
     top: 0.5rem;
     left: 0.5rem;
-    flex-wrap: wrap;
-    max-width: calc(100% - 1rem);
+    padding: 0.4rem;
   }
 
   .toolbar-button {
     width: 36px;
     height: 36px;
     font-size: 1.1rem;
+  }
+
+  .toolbar-divider {
+    width: 24px;
   }
 
   .canvas-instructions {

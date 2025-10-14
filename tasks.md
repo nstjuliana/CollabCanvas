@@ -151,7 +151,7 @@ collabcanvas/
     - `src/hooks/useShapes.js`
   - **Description:** Add `lockedBy` field to shapes. On dragStart, lock shape to current user. On dragEnd, unlock. Prevent other users from dragging locked shapes. First user to interact gets priority
 
-- [ ] **Task 13: Manual testing of multi-user synchronization**
+- [x] **Task 13: Manual testing of multi-user synchronization**
   - **Files Updated:**
     - (Bug fixes as needed)
   - **Description:** Test with multiple browser tabs/windows. Verify shape creation, movement, and locking work correctly across users
@@ -160,21 +160,21 @@ collabcanvas/
 
 ### Phase 6: Multiplayer Cursors
 
-- [ ] **Task 14: Build cursor service layer for Realtime Database**
+- [x] **Task 14: Build cursor service layer for Realtime Database**
   - **Files Created:**
     - `src/services/cursors.js`
     - `src/hooks/useCursors.js`
   - **Description:** Create functions to publish cursor position to `/cursors/{userId}` and subscribe to other users' cursors
 
-- [ ] **Task 15: Implement cursor component and rendering**
+- [x] **Task 15: Implement cursor component and rendering**
   - **Files Created:**
     - `src/components/Cursor.jsx`
   - **Files Updated:**
     - `src/components/Canvas.jsx`
-    - `src/hooks/useCursors.js`
+    - `src/components/Canvas.css`
   - **Description:** Display cursor position with username label for each connected user
 
-- [ ] **Task 16: Add cursor position updates on mouse move**
+- [x] **Task 16: Add cursor position updates on mouse move**
   - **Files Updated:**
     - `src/components/Canvas.jsx`
     - `src/services/cursors.js`

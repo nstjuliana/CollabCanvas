@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Stage, Layer, Rect, Text } from 'react-konva';
+import { Stage, Layer, Rect, Text, Transformer } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
 import Shape from './Shape';
@@ -31,12 +31,17 @@ function Canvas() {
     deleteShape,
     clearAllShapes,
     selectShape,
+    unlockShape,
     isLockedByOther,
     handleDragStart: handleShapeDragStart,
     handleDragEnd: handleShapeDragEnd,
   } = useShapes();
 
   const containerRef = useRef(null);
+  const transformerRef = useRef(null);
+  const shapeRefs = useRef({});
+  const isDraggingShapeRef = useRef(false);
+  
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -71,6 +76,30 @@ function Canvas() {
     }, 100);
     return () => clearTimeout(timer);
   }, [fitToView, dimensions]);
+
+  // Attach transformer to selected shape
+  useEffect(() => {
+    if (transformerRef.current && selectedShapeId) {
+      const selectedNode = shapeRefs.current[selectedShapeId];
+      if (selectedNode) {
+        transformerRef.current.nodes([selectedNode]);
+        transformerRef.current.getLayer().batchDraw();
+      }
+    } else if (transformerRef.current) {
+      transformerRef.current.nodes([]);
+      transformerRef.current.getLayer()?.batchDraw();
+    }
+  }, [selectedShapeId, shapes]);
+
+  // Ensure stage dragging is always enabled on mount and cleanup
+  useEffect(() => {
+    return () => {
+      // Re-enable stage dragging on unmount
+      if (stageRef.current) {
+        stageRef.current.draggable(true);
+      }
+    };
+  }, []);
 
   /**
    * Handle double-click on canvas to create a new shape
@@ -146,12 +175,25 @@ function Canvas() {
   const onShapeDragStart = async (e, shape) => {
     e.cancelBubble = true; // Prevent canvas drag
     
+    // Mark that we're dragging a shape
+    isDraggingShapeRef.current = true;
+    
+    // Disable stage dragging while dragging a shape
+    if (stageRef.current) {
+      stageRef.current.draggable(false);
+    }
+    
     // Try to lock the shape
     const success = await handleShapeDragStart(shape.id);
     
     // If couldn't lock, prevent drag
     if (!success) {
       e.target.stopDrag();
+      isDraggingShapeRef.current = false;
+      // Re-enable stage dragging
+      if (stageRef.current) {
+        stageRef.current.draggable(true);
+      }
     }
   };
 
@@ -160,8 +202,20 @@ function Canvas() {
    */
   const onShapeDragEnd = async (e, shape) => {
     e.cancelBubble = true; // Prevent event from bubbling to canvas
+    
     const node = e.target;
-    await handleShapeDragEnd(shape.id, node.x(), node.y());
+    
+    try {
+      await handleShapeDragEnd(shape.id, node.x(), node.y());
+    } finally {
+      // Mark that we're done dragging
+      isDraggingShapeRef.current = false;
+      
+      // Re-enable stage dragging
+      if (stageRef.current) {
+        stageRef.current.draggable(true);
+      }
+    }
   };
 
   /**
@@ -246,6 +300,95 @@ function Canvas() {
         console.log('Canvas cleared');
       } catch (err) {
         console.error('Failed to clear canvas:', err);
+      }
+    }
+  };
+
+  /**
+   * Handle transform start - lock the shape
+   */
+  const handleTransformStart = async () => {
+    if (!selectedShapeId) return;
+    
+    // Mark that we're transforming a shape
+    isDraggingShapeRef.current = true;
+    
+    // Disable stage dragging during transformation
+    if (stageRef.current) {
+      stageRef.current.draggable(false);
+    }
+    
+    // Try to lock the shape
+    const success = await handleShapeDragStart(selectedShapeId);
+    
+    // If couldn't lock, cancel the transform
+    if (!success && transformerRef.current) {
+      transformerRef.current.nodes([]);
+      selectShape(null);
+      isDraggingShapeRef.current = false;
+      // Re-enable stage dragging
+      if (stageRef.current) {
+        stageRef.current.draggable(true);
+      }
+    }
+  };
+
+  /**
+   * Handle transform end - update shape and unlock
+   */
+  const handleTransformEnd = async (e) => {
+    if (!selectedShapeId) return;
+    
+    const node = e.target;
+    const shape = shapes.find(s => s.id === selectedShapeId);
+    
+    if (!shape) return;
+
+    try {
+      // Get the transformed dimensions and rotation
+      const updates = {
+        x: node.x(),
+        y: node.y(),
+        rotation: node.rotation(),
+      };
+
+      // For rectangles, update width and height
+      if (shape.type === SHAPE_TYPES.RECTANGLE) {
+        updates.width = node.width() * node.scaleX();
+        updates.height = node.height() * node.scaleY();
+        
+        // Reset scale to 1 after applying it to width/height
+        node.scaleX(1);
+        node.scaleY(1);
+      } else if (shape.type === SHAPE_TYPES.CIRCLE) {
+        // For circles, update the radius (width is diameter)
+        const newRadius = (node.width() * node.scaleX()) / 2;
+        updates.width = newRadius * 2;
+        updates.height = newRadius * 2;
+        
+        // Reset scale to 1
+        node.scaleX(1);
+        node.scaleY(1);
+      }
+
+      // Update shape in Firestore
+      await updateShape(selectedShapeId, updates);
+      
+      // Unlock the shape
+      await unlockShape(selectedShapeId);
+      
+      console.log('Shape transformed:', selectedShapeId, updates);
+    } catch (err) {
+      console.error('Failed to update shape after transform:', err);
+      // Still unlock on error
+      await unlockShape(selectedShapeId);
+    } finally {
+      // Mark that we're done transforming
+      isDraggingShapeRef.current = false;
+      
+      // Re-enable stage dragging
+      if (stageRef.current) {
+        stageRef.current.draggable(true);
       }
     }
   };
@@ -356,8 +499,18 @@ function Canvas() {
         scaleY={stageScale}
         draggable={true}
         onWheel={handleWheel}
-        onDragStart={handleCanvasDragStart}
-        onDragEnd={handleCanvasDragEnd}
+        onDragStart={(e) => {
+          // Only allow canvas drag if we're not dragging a shape
+          if (!isDraggingShapeRef.current) {
+            handleCanvasDragStart(e);
+          }
+        }}
+        onDragEnd={(e) => {
+          // Only update canvas position if we're not dragging a shape
+          if (!isDraggingShapeRef.current) {
+            handleCanvasDragEnd(e);
+          }
+        }}
         onDblClick={handleCanvasDoubleClick}
         onClick={handleCanvasClick}
         className={isDragging ? 'dragging' : ''}
@@ -451,8 +604,31 @@ function Canvas() {
               onDragStart={onShapeDragStart}
               onDragEnd={onShapeDragEnd}
               onClick={onShapeClick}
+              shapeRef={(node) => {
+                if (node) {
+                  shapeRefs.current[shape.id] = node;
+                } else {
+                  delete shapeRefs.current[shape.id];
+                }
+              }}
             />
           ))}
+          
+          {/* Transformer for selected shape */}
+          <Transformer
+            ref={transformerRef}
+            onTransformStart={handleTransformStart}
+            onTransformEnd={handleTransformEnd}
+            rotateEnabled={true}
+            enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
+            boundBoxFunc={(oldBox, newBox) => {
+              // Limit minimum size
+              if (newBox.width < 20 || newBox.height < 20) {
+                return oldBox;
+              }
+              return newBox;
+            }}
+          />
         </Layer>
       </Stage>
     </div>

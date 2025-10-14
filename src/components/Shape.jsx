@@ -12,6 +12,7 @@ import { SHAPE_TYPES, SHAPE_DEFAULTS } from '../utils/constants';
  * @param {function} onDragMove - Callback during drag
  * @param {function} onDragEnd - Callback when drag ends
  * @param {function} onClick - Callback when shape is clicked
+ * @param {function} shapeRef - Ref callback for the shape node
  */
 function Shape({
   shapeData,
@@ -21,6 +22,7 @@ function Shape({
   onDragMove = null,
   onDragEnd = null,
   onClick = null,
+  shapeRef = null,
 }) {
   const {
     id,
@@ -48,6 +50,7 @@ function Shape({
     opacity: isLocked ? opacity * 0.5 : opacity,
     rotation,
     draggable: !isLocked,
+    ref: shapeRef,
     onDragStart: (e) => {
       if (onDragStart && !isLocked) {
         onDragStart(e, shapeData);

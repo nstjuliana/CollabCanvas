@@ -68,10 +68,6 @@ function useCanvas() {
    */
   const handleDragEnd = useCallback((e) => {
     setIsDragging(false);
-    setStagePosition({
-      x: e.target.x(),
-      y: e.target.y(),
-    });
   }, []);
 
   /**

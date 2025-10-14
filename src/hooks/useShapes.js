@@ -228,8 +228,8 @@ function useShapes() {
       // Unlock the shape
       await unlockShape(shapeId);
       
-      // Deselect
-      setSelectedShapeId(null);
+      // Keep shape selected after dragging
+      // (no deselection here)
     } catch (err) {
       console.error('Error handling drag end:', err);
       // Still try to unlock even if update failed

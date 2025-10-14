@@ -210,17 +210,19 @@ collabcanvas/
 
 ### Phase 8: State Persistence & Polish
 
-- [ ] **Task 20: Implement canvas state persistence on load**
+- [x] **Task 20: Implement canvas state persistence on load**
   - **Files Updated:**
     - `src/hooks/useShapes.js`
     - `src/components/Canvas.jsx`
   - **Description:** Load all shapes from global Firestore collection when canvas mounts, handle loading states
 
-- [ ] **Task 21: Add reconnection handling and error states**
+- [x] **Task 21: Add reconnection handling and error states**
   - **Files Updated:**
     - `src/services/firebase.js`
     - `src/App.jsx`
-  - **Description:** Handle Firebase connection errors, show user feedback for offline/reconnecting states
+    - `src/App.css`
+    - `src/utils/helpers.js`
+  - **Description:** Handle Firebase connection errors, show user feedback for offline/reconnecting states. Added connection monitoring, offline banner, and reconnection toast notifications.
 
 - [ ] **Task 22: Polish UI/UX and add basic styling**
   - **Files Updated:**

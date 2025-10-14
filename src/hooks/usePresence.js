@@ -10,6 +10,7 @@ import {
   cleanupPresence,
   getUserPresenceColor,
 } from '../services/presence';
+import { onConnectionStateChange } from '../services/firebase';
 import { getUserId } from '../services/auth';
 import { PRESENCE_COLORS } from '../utils/constants';
 
@@ -23,6 +24,7 @@ function usePresence() {
   const [error, setError] = useState(null);
   
   const unsubscribeRef = useRef(null);
+  const unsubscribeConnectionRef = useRef(null);
   const userId = getUserId();
 
   // Initialize presence tracking on mount
@@ -46,26 +48,76 @@ function usePresence() {
     };
   }, [userId]);
 
+  // Monitor connection state and re-initialize presence on reconnection
+  useEffect(() => {
+    if (!userId) return;
+
+    let wasDisconnected = false;
+
+    const unsubscribe = onConnectionStateChange(async (connected) => {
+      // If we reconnected after being disconnected, re-initialize presence
+      if (connected && wasDisconnected) {
+        console.log('Connection restored, re-initializing presence...');
+        try {
+          await initializePresence();
+        } catch (err) {
+          console.error('Error re-initializing presence:', err);
+        }
+      }
+
+      wasDisconnected = !connected;
+    });
+
+    unsubscribeConnectionRef.current = unsubscribe;
+
+    return () => {
+      if (unsubscribeConnectionRef.current) {
+        unsubscribeConnectionRef.current();
+      }
+    };
+  }, [userId]);
+
   // Subscribe to real-time presence updates
+  // Re-subscribe when connection state changes to ensure reliability
   useEffect(() => {
     console.log('Setting up presence subscription...');
     
-    const unsubscribe = subscribeToPresence((updatedPresence) => {
-      // Add colors to presence
-      const presenceWithColors = Object.entries(updatedPresence).reduce((acc, [uid, presenceData]) => {
-        acc[uid] = {
-          ...presenceData,
-          color: getUserPresenceColor(uid, PRESENCE_COLORS),
-        };
-        return acc;
-      }, {});
+    const setupSubscription = () => {
+      // Clean up any existing subscription
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
 
-      setPresence(presenceWithColors);
-      setLoading(false);
-      setError(null);
+      const unsubscribe = subscribeToPresence((updatedPresence) => {
+        // Add colors to presence
+        const presenceWithColors = Object.entries(updatedPresence).reduce((acc, [uid, presenceData]) => {
+          acc[uid] = {
+            ...presenceData,
+            color: getUserPresenceColor(uid, PRESENCE_COLORS),
+          };
+          return acc;
+        }, {});
+
+        setPresence(presenceWithColors);
+        setLoading(false);
+        setError(null);
+      });
+
+      unsubscribeRef.current = unsubscribe;
+    };
+
+    // Set up initial subscription
+    setupSubscription();
+
+    // Monitor connection and re-subscribe on reconnection
+    let wasDisconnected = false;
+    const unsubscribeConnection = onConnectionStateChange((connected) => {
+      if (connected && wasDisconnected) {
+        console.log('Connection restored, re-subscribing to presence...');
+        setupSubscription();
+      }
+      wasDisconnected = !connected;
     });
-
-    unsubscribeRef.current = unsubscribe;
 
     // Cleanup subscription on unmount
     return () => {
@@ -73,6 +125,7 @@ function usePresence() {
         console.log('Cleaning up presence subscription');
         unsubscribeRef.current();
       }
+      unsubscribeConnection();
     };
   }, []);
 

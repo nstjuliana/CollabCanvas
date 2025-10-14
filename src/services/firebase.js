@@ -1,7 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import { getDatabase } from 'firebase/database';
+import { getDatabase, ref, onValue } from 'firebase/database';
 
 // Firebase configuration
 const firebaseConfig = {
@@ -32,6 +32,49 @@ export const RTDB_PATHS = {
   CURSORS: 'cursors',   // /cursors/{userId}
   PRESENCE: 'presence'  // /presence/{userId}
 };
+
+/**
+ * Monitor Firebase Realtime Database connection status
+ * @param {Function} callback - Called with connection status (true/false)
+ * @returns {Function} Unsubscribe function
+ */
+export function onConnectionStateChange(callback) {
+  try {
+    const connectedRef = ref(rtdb, '.info/connected');
+    
+    const unsubscribe = onValue(connectedRef, (snapshot) => {
+      const isConnected = snapshot.val() === true;
+      console.log('Firebase connection status:', isConnected ? 'Connected' : 'Disconnected');
+      callback(isConnected);
+    });
+
+    return unsubscribe;
+  } catch (error) {
+    console.error('Error setting up connection monitoring:', error);
+    // Return no-op function if monitoring fails
+    return () => {};
+  }
+}
+
+/**
+ * Get current connection status (one-time check)
+ * Note: This uses the subscription method but unsubscribes after first value
+ * @returns {Promise<boolean>} Connection status
+ */
+export function getConnectionStatus() {
+  return new Promise((resolve) => {
+    try {
+      const connectedRef = ref(rtdb, '.info/connected');
+      const unsubscribe = onValue(connectedRef, (snapshot) => {
+        unsubscribe();
+        resolve(snapshot.val() === true);
+      });
+    } catch (error) {
+      console.error('Error checking connection status:', error);
+      resolve(false);
+    }
+  });
+}
 
 export default app;
 

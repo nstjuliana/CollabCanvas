@@ -251,11 +251,60 @@ export function getFirebaseErrorMessage(errorCode) {
     'auth/wrong-password': 'Incorrect password.',
     'auth/invalid-credential': 'Invalid email or password.',
     'auth/too-many-requests': 'Too many attempts. Please try again later.',
+    'auth/network-request-failed': 'Network error. Please check your connection.',
     'permission-denied': 'Permission denied. Please ensure you are logged in.',
     'unavailable': 'Service temporarily unavailable. Please try again.',
+    'failed-precondition': 'Operation failed. Please try again.',
   };
 
   return errorMessages[errorCode] || 'An unexpected error occurred.';
+}
+
+/**
+ * Check if an error is a network/connection error
+ * @param {Error|object} error - Error object
+ * @returns {boolean} True if connection error
+ */
+export function isConnectionError(error) {
+  if (!error) return false;
+  
+  const errorCode = error.code || '';
+  const errorMessage = (error.message || '').toLowerCase();
+  
+  // Check for Firebase connection error codes
+  const connectionErrorCodes = [
+    'unavailable',
+    'failed-precondition',
+    'auth/network-request-failed',
+    'network-error',
+  ];
+  
+  // Check for connection-related keywords in message
+  const connectionKeywords = [
+    'network',
+    'connection',
+    'offline',
+    'timeout',
+    'fetch',
+    'unreachable',
+  ];
+  
+  return (
+    connectionErrorCodes.some(code => errorCode.includes(code)) ||
+    connectionKeywords.some(keyword => errorMessage.includes(keyword))
+  );
+}
+
+/**
+ * Get user-friendly error message for connection issues
+ * @param {Error|object} error - Error object
+ * @returns {string} User-friendly message
+ */
+export function getConnectionErrorMessage(error) {
+  if (isConnectionError(error)) {
+    return 'Connection lost. Changes will sync when you\'re back online.';
+  }
+  return getFirebaseErrorMessage(error.code) || error.message;
 }
 
 /**

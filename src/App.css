@@ -6,6 +6,107 @@
   height: 100vh;
   background: #f5f5f5;
   overflow: hidden;
+  position: relative;
+}
+
+/* Connection Status Banner (persistent at top) */
+.connection-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  z-index: 1000;
+  font-size: 0.9rem;
+  font-weight: 600;
+  animation: slideDown 0.3s ease-out;
+}
+
+.connection-banner.offline {
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(255, 107, 107, 0.3);
+}
+
+.connection-banner .banner-icon {
+  font-size: 1.1rem;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.connection-banner .banner-text {
+  letter-spacing: 0.3px;
+}
+
+/* Connection Toast (temporary notification) */
+.connection-toast {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideInRight 0.3s ease-out, fadeOut 0.3s ease-in 2.7s forwards;
+}
+
+.connection-toast.connected {
+  background: linear-gradient(135deg, #52b788 0%, #40916c 100%);
+  color: white;
+}
+
+.connection-toast .toast-icon {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(400px);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
 }
 
 /* Loading State */

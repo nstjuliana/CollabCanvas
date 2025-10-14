@@ -11,6 +11,7 @@ import {
   cleanupCursor,
   getUserCursorColor,
 } from '../services/cursors';
+import { onConnectionStateChange } from '../services/firebase';
 import { getUserId } from '../services/auth';
 import { PRESENCE_COLORS, CURSOR_CONFIG } from '../utils/constants';
 
@@ -24,6 +25,7 @@ function useCursors() {
   const [error, setError] = useState(null);
   
   const unsubscribeRef = useRef(null);
+  const unsubscribeConnectionRef = useRef(null);
   const lastUpdateTimeRef = useRef(0);
   const userId = getUserId();
 
@@ -48,26 +50,76 @@ function useCursors() {
     };
   }, [userId]);
 
+  // Monitor connection state and re-initialize cursor on reconnection
+  useEffect(() => {
+    if (!userId) return;
+
+    let wasDisconnected = false;
+
+    const unsubscribe = onConnectionStateChange(async (connected) => {
+      // If we reconnected after being disconnected, re-initialize cursor
+      if (connected && wasDisconnected) {
+        console.log('Connection restored, re-initializing cursor...');
+        try {
+          await initializeCursor();
+        } catch (err) {
+          console.error('Error re-initializing cursor:', err);
+        }
+      }
+
+      wasDisconnected = !connected;
+    });
+
+    unsubscribeConnectionRef.current = unsubscribe;
+
+    return () => {
+      if (unsubscribeConnectionRef.current) {
+        unsubscribeConnectionRef.current();
+      }
+    };
+  }, [userId]);
+
   // Subscribe to real-time cursor updates
+  // Re-subscribe when connection state changes to ensure reliability
   useEffect(() => {
     console.log('Setting up cursors subscription...');
     
-    const unsubscribe = subscribeToCursors((updatedCursors) => {
-      // Add colors to cursors
-      const cursorsWithColors = Object.entries(updatedCursors).reduce((acc, [uid, cursor]) => {
-        acc[uid] = {
-          ...cursor,
-          color: getUserCursorColor(uid, PRESENCE_COLORS),
-        };
-        return acc;
-      }, {});
+    const setupSubscription = () => {
+      // Clean up any existing subscription
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
 
-      setCursors(cursorsWithColors);
-      setLoading(false);
-      setError(null);
+      const unsubscribe = subscribeToCursors((updatedCursors) => {
+        // Add colors to cursors
+        const cursorsWithColors = Object.entries(updatedCursors).reduce((acc, [uid, cursor]) => {
+          acc[uid] = {
+            ...cursor,
+            color: getUserCursorColor(uid, PRESENCE_COLORS),
+          };
+          return acc;
+        }, {});
+
+        setCursors(cursorsWithColors);
+        setLoading(false);
+        setError(null);
+      });
+
+      unsubscribeRef.current = unsubscribe;
+    };
+
+    // Set up initial subscription
+    setupSubscription();
+
+    // Monitor connection and re-subscribe on reconnection
+    let wasDisconnected = false;
+    const unsubscribeConnection = onConnectionStateChange((connected) => {
+      if (connected && wasDisconnected) {
+        console.log('Connection restored, re-subscribing to cursors...');
+        setupSubscription();
+      }
+      wasDisconnected = !connected;
     });
-
-    unsubscribeRef.current = unsubscribe;
 
     // Cleanup subscription on unmount
     return () => {
@@ -75,6 +127,7 @@ function useCursors() {
         console.log('Cleaning up cursors subscription');
         unsubscribeRef.current();
       }
+      unsubscribeConnection();
     };
   }, []);
 

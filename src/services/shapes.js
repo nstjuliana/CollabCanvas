@@ -326,6 +326,85 @@ export function isShapeLockedByMe(shape, currentUserId) {
 }
 
 /**
+ * Clear all locks from all shapes (admin function)
+ * Use this to fix orphaned locks when users disconnect unexpectedly
+ * @returns {Promise<number>} Number of shapes unlocked
+ */
+export async function clearAllLocks() {
+  try {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error('User must be authenticated to clear locks');
+    }
+
+    const shapesRef = collection(db, COLLECTIONS.SHAPES);
+    const q = query(shapesRef);
+    const snapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+    let count = 0;
+
+    snapshot.forEach((doc) => {
+      const shape = doc.data();
+      if (shape.lockedBy) {
+        batch.update(doc.ref, {
+          lockedBy: null,
+          lockedAt: null,
+        });
+        count++;
+      }
+    });
+
+    await batch.commit();
+    console.log(`Cleared locks from ${count} shapes`);
+    return count;
+  } catch (error) {
+    console.error('Error clearing all locks:', error);
+    throw new Error(`Failed to clear locks: ${error.message}`);
+  }
+}
+
+/**
+ * Unlock all shapes locked by a specific user
+ * @param {string} targetUserId - User ID whose locks to clear
+ * @returns {Promise<number>} Number of shapes unlocked
+ */
+export async function unlockShapesForUser(targetUserId) {
+  try {
+    if (!targetUserId) {
+      throw new Error('User ID is required to unlock shapes');
+    }
+
+    const shapesRef = collection(db, COLLECTIONS.SHAPES);
+    const snapshot = await getDocs(shapesRef);
+    
+    const batch = writeBatch(db);
+    let count = 0;
+
+    snapshot.forEach((doc) => {
+      const shape = doc.data();
+      if (shape.lockedBy === targetUserId) {
+        batch.update(doc.ref, {
+          lockedBy: null,
+          lockedAt: null,
+        });
+        count++;
+      }
+    });
+
+    if (count > 0) {
+      await batch.commit();
+      console.log(`Unlocked ${count} shapes for user: ${targetUserId}`);
+    }
+    
+    return count;
+  } catch (error) {
+    console.error('Error unlocking shapes for user:', error);
+    throw new Error(`Failed to unlock shapes: ${error.message}`);
+  }
+}
+
+/**
  * Unlock all shapes locked by the current user (cleanup on disconnect)
  * @returns {Promise<void>}
  */
@@ -334,13 +413,8 @@ export async function unlockAllMyShapes() {
     const userId = getUserId();
     if (!userId) return;
 
-    // This is a simple implementation - in production you might want to use a batch write
-    // or a cloud function to handle this more efficiently
-    console.log('Unlocking all shapes for user:', userId);
-    
-    // Note: This requires reading all shapes first, which isn't ideal
-    // A better approach would be to use a Firestore query or Cloud Function
-    // For MVP, we'll rely on manual cleanup and lock timeouts
+    console.log('Unlocking all shapes for current user:', userId);
+    await unlockShapesForUser(userId);
   } catch (error) {
     console.error('Error unlocking all shapes:', error);
   }

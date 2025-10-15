@@ -3,6 +3,7 @@ import { Stage, Layer, Rect, Text, Transformer } from 'react-konva';
 import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
 import useCursors from '../hooks/useCursors';
+import usePresence from '../hooks/usePresence';
 import Shape from './Shape';
 import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
@@ -23,6 +24,9 @@ function Canvas() {
     fitToView,
   } = useCanvas();
 
+  // Get presence data to monitor disconnections
+  const { presence } = usePresence();
+
   const {
     shapes,
     loading,
@@ -37,7 +41,7 @@ function Canvas() {
     isLockedByOther,
     handleDragStart: handleShapeDragStart,
     handleDragEnd: handleShapeDragEnd,
-  } = useShapes();
+  } = useShapes(presence);
 
   const {
     cursorsList,

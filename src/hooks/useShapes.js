@@ -9,9 +9,11 @@ import {
   updateShape as updateShapeService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
+  clearAllLocks as clearAllLocksService,
   subscribeToShapes,
   lockShape as lockShapeService,
   unlockShape as unlockShapeService,
+  unlockShapesForUser,
   isShapeLockedByOther,
   isShapeLockedByMe,
 } from '../services/shapes';
@@ -19,9 +21,10 @@ import { getUserId } from '../services/auth';
 
 /**
  * Custom hook for managing shapes
+ * @param {object} presence - Optional presence object to monitor for disconnections
  * @returns {object} Shapes state and methods
  */
-function useShapes() {
+function useShapes(presence = {}) {
   const [shapes, setShapes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -29,6 +32,7 @@ function useShapes() {
   
   const unsubscribeRef = useRef(null);
   const userId = getUserId();
+  const previousPresenceRef = useRef({});
 
   // Subscribe to real-time shape updates
   useEffect(() => {
@@ -58,6 +62,33 @@ function useShapes() {
       }
     };
   }, [selectedShapeId]);
+
+  // Monitor presence changes and unlock shapes when users disconnect
+  useEffect(() => {
+    const previousPresence = previousPresenceRef.current;
+    const currentPresence = presence;
+
+    // Find users who were present before but are not present now (disconnected users)
+    const disconnectedUserIds = Object.keys(previousPresence).filter(
+      userId => !currentPresence[userId]
+    );
+
+    // Unlock shapes for each disconnected user
+    disconnectedUserIds.forEach(async (disconnectedUserId) => {
+      try {
+        console.log(`User disconnected: ${disconnectedUserId}, unlocking their shapes...`);
+        const count = await unlockShapesForUser(disconnectedUserId);
+        if (count > 0) {
+          console.log(`Unlocked ${count} shapes for disconnected user: ${disconnectedUserId}`);
+        }
+      } catch (err) {
+        console.error(`Error unlocking shapes for user ${disconnectedUserId}:`, err);
+      }
+    });
+
+    // Update the previous presence reference
+    previousPresenceRef.current = currentPresence;
+  }, [presence]);
 
   /**
    * Create a new shape
@@ -125,6 +156,23 @@ function useShapes() {
       setSelectedShapeId(null);
     } catch (err) {
       console.error('Error clearing shapes:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  /**
+   * Clear all locks from all shapes (fix orphaned locks)
+   * @returns {Promise<number>} Number of shapes unlocked
+   */
+  const clearAllLocks = useCallback(async () => {
+    try {
+      setError(null);
+      const count = await clearAllLocksService();
+      console.log(`Unlocked ${count} shapes`);
+      return count;
+    } catch (err) {
+      console.error('Error clearing locks:', err);
       setError(err.message);
       throw err;
     }
@@ -295,6 +343,7 @@ function useShapes() {
     updateShape,
     deleteShape,
     clearAllShapes,
+    clearAllLocks,
     lockShape,
     unlockShape,
     selectShape,

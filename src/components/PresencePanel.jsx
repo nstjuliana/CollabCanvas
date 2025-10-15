@@ -77,23 +77,20 @@ function PresencePanel() {
         {otherUsers.length > 0 && (
           <div className="presence-section">
             <h4 className="section-title">
-              Others ({otherUsers.filter(u => u.status === 'online').length} online)
+              Others ({otherUsers.length} online)
             </h4>
             {otherUsers.map((user) => (
               <div 
                 key={user.userId} 
-                className={`presence-item ${user.status === 'online' ? 'online' : 'offline'}`}
+                className="presence-item online"
               >
                 <div 
-                  className={`status-indicator ${user.status === 'online' ? 'online' : 'offline'}`}
-                  style={{ backgroundColor: user.status === 'online' ? user.color : '#999' }}
-                  title={user.status === 'online' ? 'Online' : 'Offline'}
+                  className="status-indicator online"
+                  style={{ backgroundColor: user.color }}
+                  title="Online"
                 ></div>
                 <div className="user-details">
                   <span className="user-name">{user.displayName}</span>
-                  {user.status !== 'online' && (
-                    <span className="user-status-text">Offline</span>
-                  )}
                 </div>
               </div>
             ))}

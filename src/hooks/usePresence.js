@@ -130,15 +130,12 @@ function usePresence() {
   }, []);
 
   /**
-   * Get all users' presence as an array, sorted by online status
+   * Get all users' presence as an array, sorted by display name
    * @returns {Array} Array of presence objects
    */
   const getPresenceList = useCallback(() => {
     return Object.values(presence).sort((a, b) => {
-      // Sort online users first
-      if (a.status === 'online' && b.status !== 'online') return -1;
-      if (a.status !== 'online' && b.status === 'online') return 1;
-      // Then sort by display name
+      // Sort by display name (all users in list are online)
       return (a.displayName || '').localeCompare(b.displayName || '');
     });
   }, [presence]);
@@ -153,29 +150,28 @@ function usePresence() {
   }, [presence]);
 
   /**
-   * Get the number of online users
+   * Get the number of online users (all users in presence list are online)
    * @returns {number} Count of online users
    */
   const getOnlineUserCount = useCallback(() => {
-    return Object.values(presence).filter(p => p.status === 'online').length;
+    return Object.keys(presence).length;
   }, [presence]);
 
   /**
-   * Get list of only online users
+   * Get list of only online users (same as presenceList since we only store online users)
    * @returns {Array} Array of online user presence objects
    */
   const getOnlineUsers = useCallback(() => {
-    return Object.values(presence).filter(p => p.status === 'online');
+    return Object.values(presence);
   }, [presence]);
 
   /**
-   * Check if a specific user is online
+   * Check if a specific user is online (present in the presence list)
    * @param {string} targetUserId - User ID to check
    * @returns {boolean} True if user is online
    */
   const isUserOnline = useCallback((targetUserId) => {
-    const userPresence = presence[targetUserId];
-    return userPresence?.status === 'online';
+    return !!presence[targetUserId];
   }, [presence]);
 
   return {

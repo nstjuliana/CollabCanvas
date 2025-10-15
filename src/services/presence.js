@@ -30,11 +30,10 @@ export async function setUserOnline() {
     const displayName = getUserDisplayName();
     const presenceRef = ref(rtdb, `${RTDB_PATHS.PRESENCE}/${userId}`);
 
-    // Set user as online
+    // Set user as online (no status field needed since presence = online)
     await set(presenceRef, {
       userId,
       displayName: displayName || 'Anonymous',
-      status: 'online',
       lastSeen: serverTimestamp(),
     });
 
@@ -42,32 +41,6 @@ export async function setUserOnline() {
   } catch (error) {
     console.error('Error setting user online:', error);
     throw error;
-  }
-}
-
-/**
- * Set the current user as offline in the Realtime Database
- * @returns {Promise<void>}
- */
-export async function setUserOffline() {
-  try {
-    const userId = getUserId();
-    if (!userId) return;
-
-    const presenceRef = ref(rtdb, `${RTDB_PATHS.PRESENCE}/${userId}`);
-    
-    // Set user as offline (or remove completely)
-    await set(presenceRef, {
-      userId,
-      displayName: getUserDisplayName() || 'Anonymous',
-      status: 'offline',
-      lastSeen: serverTimestamp(),
-    });
-
-    console.log('User set to offline:', userId);
-  } catch (error) {
-    console.error('Error setting user offline:', error);
-    // Don't throw error for offline status (graceful degradation)
   }
 }
 
@@ -134,7 +107,7 @@ export function subscribeToPresence(callback) {
 
 /**
  * Set up presence cleanup on disconnect
- * This ensures the user is marked offline when they lose connection
+ * This ensures the user is removed from the presence list when they lose connection
  * Should be called once when the user logs in or connects
  * @returns {Promise<void>}
  */
@@ -147,13 +120,8 @@ export async function setupPresenceCleanup() {
 
     const presenceRef = ref(rtdb, `${RTDB_PATHS.PRESENCE}/${userId}`);
     
-    // Set up automatic status change on disconnect
-    await onDisconnect(presenceRef).set({
-      userId,
-      displayName: getUserDisplayName() || 'Anonymous',
-      status: 'offline',
-      lastSeen: serverTimestamp(),
-    });
+    // Set up automatic removal on disconnect
+    await onDisconnect(presenceRef).remove();
 
     console.log('Presence cleanup configured for user:', userId);
   } catch (error) {

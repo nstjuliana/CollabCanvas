@@ -288,13 +288,7 @@
 
 @media (max-width: 768px) {
   .presence-panel {
-    position: absolute;
-    right: 0;
-    top: 0;
-    width: 280px;
-    max-width: 100%;
-    z-index: 100;
-    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.15);
+    display: none; /* Hide on mobile - use header avatars instead */
   }
 }
 

@@ -3,6 +3,7 @@ import { onAuthStateChanged, logout } from './services/auth';
 import { onConnectionStateChange } from './services/firebase';
 import { cleanupCursor } from './services/cursors';
 import { cleanupPresence } from './services/presence';
+import usePresence from './hooks/usePresence';
 import AuthForm from './components/AuthForm';
 import Canvas from './components/Canvas';
 import PresencePanel from './components/PresencePanel';
@@ -13,6 +14,13 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(true);
   const [showReconnectedToast, setShowReconnectedToast] = useState(false);
+  
+  // Get presence data for mobile header
+  const { onlineUsers, onlineUserCount } = usePresence();
+  
+  // Filter out current user from avatars (they see their own username already)
+  const otherUsers = user ? onlineUsers.filter(u => u.userId !== user.uid) : onlineUsers;
+  const otherUserCount = otherUsers.length;
 
   useEffect(() => {
     // Subscribe to auth state changes
@@ -103,6 +111,26 @@ function App() {
 
       <header className="app-header">
         <h1>CollabCanvas</h1>
+        
+        {/* Mobile Presence Avatars - Show other users only */}
+        <div className="mobile-presence">
+          {otherUsers.slice(0, 3).map((onlineUser) => (
+            <div
+              key={onlineUser.userId}
+              className="mobile-avatar"
+              style={{ backgroundColor: onlineUser.color }}
+              title={onlineUser.displayName}
+            >
+              {onlineUser.displayName.charAt(0).toUpperCase()}
+            </div>
+          ))}
+          {otherUserCount > 3 && (
+            <div className="mobile-avatar-more">
+              +{otherUserCount - 3}
+            </div>
+          )}
+        </div>
+
         <div className="user-info">
           <span className="username">👤 {user.displayName}</span>
           <button onClick={handleLogout} className="logout-button">

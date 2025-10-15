@@ -50,6 +50,10 @@ function Canvas() {
   const shapeRefs = useRef({});
   const isDraggingShapeRef = useRef(false);
   
+  // Track touch events for double-tap detection on mobile
+  const lastTapRef = useRef(0);
+  const tapTimeoutRef = useRef(null);
+  
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -139,32 +143,9 @@ function Canvas() {
   }, [selectedShapeId, isLockedByOther, deleteShape]);
 
   /**
-   * Handle double-click on canvas to create a new shape
+   * Create a shape at the given position
    */
-  const handleCanvasDoubleClick = async (e) => {
-    // Don't create shapes when delete tool is active
-    if (selectedTool === TOOL_TYPES.DELETE) {
-      return;
-    }
-
-    // Ignore if clicking on a user-created shape
-    // Shapes have an 'id' attribute that matches our Firestore shape IDs
-    const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
-    
-    // Don't create if clicking on an existing shape
-    if (hasShapeId) {
-      console.log('Clicked on existing shape, not creating new one');
-      return;
-    }
-
-    // Get click position in canvas coordinates
-    const stage = stageRef.current;
-    const pointerPosition = stage.getPointerPosition();
-    const canvasPos = screenToCanvas(stage, pointerPosition);
-    
-    console.log('Creating shape at', canvasPos);
-
-    // Create shape at click position
+  const createShapeAtPosition = async (canvasPos) => {
     try {
       let newShape;
       
@@ -203,6 +184,84 @@ function Canvas() {
       console.log('Shape created at', canvasPos);
     } catch (err) {
       console.error('Failed to create shape:', err);
+    }
+  };
+
+  /**
+   * Handle double-click on canvas to create a new shape
+   */
+  const handleCanvasDoubleClick = async (e) => {
+    // Don't create shapes when delete tool is active
+    if (selectedTool === TOOL_TYPES.DELETE) {
+      return;
+    }
+
+    // Ignore if clicking on a user-created shape
+    // Shapes have an 'id' attribute that matches our Firestore shape IDs
+    const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
+    
+    // Don't create if clicking on an existing shape
+    if (hasShapeId) {
+      console.log('Clicked on existing shape, not creating new one');
+      return;
+    }
+
+    // Get click position in canvas coordinates
+    const stage = stageRef.current;
+    const pointerPosition = stage.getPointerPosition();
+    const canvasPos = screenToCanvas(stage, pointerPosition);
+    
+    console.log('Creating shape at', canvasPos);
+    await createShapeAtPosition(canvasPos);
+  };
+
+  /**
+   * Handle touch/tap on canvas for mobile double-tap detection
+   */
+  const handleCanvasTap = async (e) => {
+    // Don't create shapes when delete tool is active
+    if (selectedTool === TOOL_TYPES.DELETE) {
+      return;
+    }
+
+    // Ignore if clicking on a user-created shape
+    const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
+    if (hasShapeId) {
+      return;
+    }
+
+    const now = Date.now();
+    const timeSinceLastTap = now - lastTapRef.current;
+
+    // If tapped within 300ms of last tap, it's a double-tap
+    if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
+      // Double-tap detected!
+      const stage = stageRef.current;
+      const pointerPosition = stage.getPointerPosition();
+      const canvasPos = screenToCanvas(stage, pointerPosition);
+      
+      console.log('Double-tap detected, creating shape at', canvasPos);
+      await createShapeAtPosition(canvasPos);
+      
+      // Reset to prevent triple-tap from creating another shape
+      lastTapRef.current = 0;
+      
+      // Clear any pending timeout
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+        tapTimeoutRef.current = null;
+      }
+    } else {
+      // First tap - record the time
+      lastTapRef.current = now;
+      
+      // Clear after 300ms to reset double-tap detection
+      if (tapTimeoutRef.current) {
+        clearTimeout(tapTimeoutRef.current);
+      }
+      tapTimeoutRef.current = setTimeout(() => {
+        lastTapRef.current = 0;
+      }, 300);
     }
   };
 
@@ -591,6 +650,7 @@ function Canvas() {
           }
         }}
         onDblClick={handleCanvasDoubleClick}
+        onTap={handleCanvasTap}
         onClick={handleCanvasClick}
         className={isDragging ? 'dragging' : ''}
       >

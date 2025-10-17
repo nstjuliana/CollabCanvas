@@ -60,6 +60,11 @@ export async function createShape(shapeData) {
       shape.text = shapeData.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
       shape.fontSize = shapeData.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
       shape.fontFamily = shapeData.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+    } else if (shapeData.type === SHAPE_TYPES.IMAGE) {
+      // Image-specific properties
+      shape.imageUrl = shapeData.imageUrl;
+      shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+      shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
     } else {
       // Shape-specific properties (rectangle, circle)
       shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;

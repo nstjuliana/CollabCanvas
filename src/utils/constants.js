@@ -23,6 +23,8 @@ export const SHAPE_DEFAULTS = {
   TEXT_FONT_SIZE: 24,
   TEXT_FONT_FAMILY: 'Inter, system-ui, sans-serif',
   TEXT_DEFAULT: 'Text',
+  IMAGE_MAX_WIDTH: 800,
+  IMAGE_MAX_HEIGHT: 800,
 };
 
 // Shape Types
@@ -30,6 +32,7 @@ export const SHAPE_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
   TEXT: 'text',
+  IMAGE: 'image',
   // Future: Add more shape types as needed
 };
 

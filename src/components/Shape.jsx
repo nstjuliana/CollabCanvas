@@ -1,6 +1,79 @@
 import { useRef, useEffect, useState } from 'react';
-import { Rect, Ellipse, Group, Text, Rect as KonvaRect } from 'react-konva';
+import { Rect, Ellipse, Group, Text, Rect as KonvaRect, Image as KonvaImage } from 'react-konva';
 import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
+import useImage from 'use-image';
+
+/**
+ * ImageShape Component  
+ * Renders an image from a URL
+ */
+function ImageShape({ 
+  imageUrl, 
+  width, 
+  height, 
+  isSelected, 
+  isLocked, 
+  isHovering,
+  lockerColor,
+  finalStrokeWidth 
+}) {
+  // Don't use 'anonymous' crossOrigin for Firebase Storage URLs
+  // The download URL includes authentication token
+  const [image, status] = useImage(imageUrl);
+  
+  // Show loading state
+  if (status === 'loading') {
+    return (
+      <Rect
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill="#f0f0f0"
+        stroke="#ccc"
+        strokeWidth={1}
+        dash={[5, 5]}
+      />
+    );
+  }
+
+  // Show error state
+  if (status === 'failed') {
+    return (
+      <Group>
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="#ffebee"
+          stroke="#f44336"
+          strokeWidth={2}
+        />
+        <Text
+          x={0}
+          y={height / 2 - 10}
+          width={width}
+          text="Failed to load image"
+          fontSize={14}
+          fill="#f44336"
+          align="center"
+        />
+      </Group>
+    );
+  }
+
+  return (
+    <KonvaImage
+      x={0}
+      y={0}
+      image={image}
+      width={width}
+      height={height}
+      opacity={isLocked ? 0.5 : 1}
+    />
+  );
+}
 
 /**
  * TextShape Component  
@@ -290,6 +363,36 @@ function Shape({
             textScaleY={scaleY}
             shapeRef={null}
           />
+        </Group>
+      );
+      break;
+
+    case SHAPE_TYPES.IMAGE:
+      shapeElement = (
+        <Group {...commonProps} ref={shapeRef}>
+          <ImageShape
+            imageUrl={shapeData.imageUrl}
+            width={width}
+            height={height}
+            isSelected={isSelected}
+            isLocked={isLocked}
+            isHovering={isHovering}
+            lockerColor={lockerColor}
+            finalStrokeWidth={finalStrokeWidth}
+          />
+          {/* Border for selected/locked images */}
+          {(isSelected || isLocked || isHovering) && (
+            <Rect
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fill="transparent"
+              stroke={isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : '#000000'))}
+              strokeWidth={finalStrokeWidth}
+              listening={false}
+            />
+          )}
         </Group>
       );
       break;

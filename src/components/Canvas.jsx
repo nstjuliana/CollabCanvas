@@ -9,6 +9,7 @@ import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
 import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL, DEFAULT_SHAPE_COLOR } from '../utils/constants';
 import { screenToCanvas, getRandomColor } from '../utils/helpers';
+import { uploadImage, loadImage, calculateScaledDimensions } from '../services/images';
 import './Canvas.css';
 
 function Canvas() {
@@ -74,6 +75,10 @@ function Canvas() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [selectionBox, setSelectionBox] = useState(null); // { x1, y1, x2, y2 }
   const [isDrawingSelection, setIsDrawingSelection] = useState(false);
+  
+  // Image upload state
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   // Text editing state
   const [isEditingText, setIsEditingText] = useState(false);
@@ -830,6 +835,107 @@ function Canvas() {
   };
 
   /**
+   * Load image from file and get dimensions
+   */
+  const loadImageFromFile = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve({
+            width: img.width,
+            height: img.height,
+          });
+        };
+        img.onerror = () => reject(new Error('Failed to load image'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  /**
+   * Handle image drop
+   */
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    
+    // Get the dropped files
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith('image/'));
+    
+    if (imageFiles.length === 0) {
+      console.log('No image files dropped');
+      return;
+    }
+
+    // Get drop position on canvas
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    // Get the drop position relative to the canvas
+    const canvasContainer = containerRef.current;
+    const rect = canvasContainer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const canvasPos = screenToCanvas(stage, { x, y });
+
+    // Upload and create shapes for each image
+    for (const file of imageFiles) {
+      try {
+        setIsUploadingImage(true);
+        console.log('Processing image:', file.name);
+
+        // Get image dimensions from file BEFORE uploading (avoids CORS issue)
+        const { width: imgWidth, height: imgHeight } = await loadImageFromFile(file);
+
+        // Calculate scaled dimensions
+        const { width, height } = calculateScaledDimensions(
+          imgWidth,
+          imgHeight,
+          SHAPE_DEFAULTS.IMAGE_MAX_WIDTH,
+          SHAPE_DEFAULTS.IMAGE_MAX_HEIGHT
+        );
+
+        // Upload to Firebase Storage
+        console.log('Uploading image:', file.name);
+        const imageUrl = await uploadImage(file);
+        console.log('Upload complete:', file.name);
+
+        // Create image shape at drop position
+        const newShape = {
+          type: SHAPE_TYPES.IMAGE,
+          x: canvasPos.x - width / 2, // Center on cursor
+          y: canvasPos.y - height / 2,
+          width,
+          height,
+          imageUrl,
+          opacity: SHAPE_DEFAULTS.OPACITY,
+          rotation: 0,
+        };
+
+        await createShape(newShape);
+        console.log('Image shape created:', file.name);
+      } catch (err) {
+        console.error('Failed to upload image:', err);
+        alert(`Failed to upload ${file.name}: ${err.message}`);
+      } finally {
+        setIsUploadingImage(false);
+      }
+    }
+  };
+
+  /**
+   * Handle drag over (required to enable drop)
+   */
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  /**
    * Handle transform start - lock the shapes
    */
   const handleTransformStart = async () => {
@@ -937,7 +1043,12 @@ function Canvas() {
   };
 
   return (
-    <div className="canvas-wrapper" ref={containerRef}>
+    <div 
+      className="canvas-wrapper" 
+      ref={containerRef}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
       {/* Unified Toolbar */}
       <div className="toolbar">
         {/* Shapes */}
@@ -1031,7 +1142,7 @@ function Canvas() {
       {/* Canvas Instructions */}
       <div className="canvas-instructions">
         <p>
-          🖱️ Drag to pan • 🖲️ Scroll to zoom • 
+          🖱️ Drag to pan • 🖲️ Scroll to zoom • 📎 Drag & drop images • 
           {selectedTool === TOOL_TYPES.DELETE 
             ? ' Click shapes to delete' 
             : selectedTool === TOOL_TYPES.TEXT
@@ -1309,6 +1420,41 @@ function Canvas() {
           />
         );
       })()}
+
+      {/* Image Upload Loading Indicator */}
+      {isUploadingImage && (
+        <div 
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '20px 40px',
+            borderRadius: '8px',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            fontSize: '16px',
+            fontWeight: '500',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+          }}
+        >
+          <div 
+            style={{
+              width: '24px',
+              height: '24px',
+              border: '3px solid rgba(255, 255, 255, 0.3)',
+              borderTop: '3px solid white',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite',
+            }}
+          />
+          <span>Uploading image...</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,26 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to upload images
+    match /images/{imageId} {
+      // Allow read for all authenticated users
+      allow read: if request.auth != null;
+      
+      // Allow write (create) for authenticated users
+      // Validate file size (max 10MB) and content type
+      allow create: if request.auth != null
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      
+      // Allow delete only for the user who uploaded it
+      allow delete: if request.auth != null
+                    && resource.metadata.uploadedBy == request.auth.uid;
+      
+      // Allow update only for the user who uploaded it
+      allow update: if request.auth != null
+                    && resource.metadata.uploadedBy == request.auth.uid;
+    }
+  }
+}
+

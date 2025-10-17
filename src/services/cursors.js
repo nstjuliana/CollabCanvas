@@ -76,7 +76,7 @@ export function subscribeToCursors(callback) {
           });
         }
 
-        console.log('Cursors updated:', Object.keys(cursors).length);
+        // console.log('Cursors updated:', Object.keys(cursors).length);
         callback(cursors);
       },
       (error) => {

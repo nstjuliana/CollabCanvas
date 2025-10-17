@@ -20,12 +20,16 @@ export const SHAPE_DEFAULTS = {
   STROKE_WIDTH: 2,
   CORNER_RADIUS: 0,
   OPACITY: 1,
+  TEXT_FONT_SIZE: 24,
+  TEXT_FONT_FAMILY: 'Inter, system-ui, sans-serif',
+  TEXT_DEFAULT: 'Text',
 };
 
 // Shape Types
 export const SHAPE_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
+  TEXT: 'text',
   // Future: Add more shape types as needed
 };
 
@@ -36,6 +40,7 @@ export const DEFAULT_SHAPE_TYPE = SHAPE_TYPES.RECTANGLE;
 export const TOOL_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
+  TEXT: 'text',
   DELETE: 'delete',
 };
 

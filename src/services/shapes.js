@@ -42,12 +42,7 @@ export async function createShape(shapeData) {
       type: shapeData.type || SHAPE_TYPES.RECTANGLE,
       x: shapeData.x || 0,
       y: shapeData.y || 0,
-      width: shapeData.width || SHAPE_DEFAULTS.WIDTH,
-      height: shapeData.height || SHAPE_DEFAULTS.HEIGHT,
       fill: shapeData.fill || DEFAULT_SHAPE_COLOR,
-      stroke: shapeData.stroke || '#333333',
-      strokeWidth: shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH,
-      cornerRadius: shapeData.cornerRadius || SHAPE_DEFAULTS.CORNER_RADIUS,
       opacity: shapeData.opacity ?? SHAPE_DEFAULTS.OPACITY,
       rotation: shapeData.rotation || 0,
       
@@ -58,6 +53,24 @@ export async function createShape(shapeData) {
       lockedBy: null, // For object locking
       lockedAt: null,
     };
+
+    // Add type-specific properties
+    if (shapeData.type === SHAPE_TYPES.TEXT) {
+      // Text-specific properties
+      shape.text = shapeData.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
+      shape.fontSize = shapeData.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
+      shape.fontFamily = shapeData.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+    } else {
+      // Shape-specific properties (rectangle, circle)
+      shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+      shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+      shape.stroke = shapeData.stroke || '#333333';
+      shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
+      
+      if (shapeData.type === SHAPE_TYPES.RECTANGLE) {
+        shape.cornerRadius = shapeData.cornerRadius || SHAPE_DEFAULTS.CORNER_RADIUS;
+      }
+    }
 
     // Add to Firestore
     const shapesRef = collection(db, COLLECTIONS.SHAPES);

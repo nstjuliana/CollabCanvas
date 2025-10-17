@@ -28,7 +28,7 @@ function useShapes(presence = {}) {
   const [shapes, setShapes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedShapeId, setSelectedShapeId] = useState(null);
+  const [selectedShapeIds, setSelectedShapeIds] = useState([]);
   
   const unsubscribeRef = useRef(null);
   const userId = getUserId();
@@ -53,15 +53,17 @@ function useShapes(presence = {}) {
         unsubscribeRef.current();
       }
       
-      // Unlock any selected shape on cleanup
-      if (selectedShapeId) {
-        console.log('Unlocking selected shape on unmount');
-        unlockShapeService(selectedShapeId).catch(err => 
-          console.error('Error unlocking shape on cleanup:', err)
-        );
+      // Unlock any selected shapes on cleanup
+      if (selectedShapeIds.length > 0) {
+        console.log('Unlocking selected shapes on unmount');
+        selectedShapeIds.forEach(shapeId => {
+          unlockShapeService(shapeId).catch(err => 
+            console.error('Error unlocking shape on cleanup:', err)
+          );
+        });
       }
     };
-  }, [selectedShapeId]);
+  }, [selectedShapeIds]);
 
   // Monitor presence changes and unlock shapes when users disconnect
   useEffect(() => {
@@ -135,15 +137,36 @@ function useShapes(presence = {}) {
       await deleteShapeService(shapeId);
       
       // Clear selection if deleted shape was selected
-      if (selectedShapeId === shapeId) {
-        setSelectedShapeId(null);
+      if (selectedShapeIds.includes(shapeId)) {
+        setSelectedShapeIds(prev => prev.filter(id => id !== shapeId));
       }
     } catch (err) {
       console.error('Error deleting shape:', err);
       setError(err.message);
       throw err;
     }
-  }, [selectedShapeId]);
+  }, [selectedShapeIds]);
+
+  /**
+   * Delete multiple shapes
+   * @param {string[]} shapeIds - Array of shape IDs to delete
+   * @returns {Promise<void>}
+   */
+  const deleteMultipleShapes = useCallback(async (shapeIds) => {
+    try {
+      setError(null);
+      
+      // Delete each shape
+      await Promise.all(shapeIds.map(id => deleteShapeService(id)));
+      
+      // Clear selection
+      setSelectedShapeIds(prev => prev.filter(id => !shapeIds.includes(id)));
+    } catch (err) {
+      console.error('Error deleting multiple shapes:', err);
+      setError(err.message);
+      throw err;
+    }
+  }, []);
 
   /**
    * Clear all shapes from the canvas
@@ -153,7 +176,7 @@ function useShapes(presence = {}) {
     try {
       setError(null);
       await clearAllShapesService();
-      setSelectedShapeId(null);
+      setSelectedShapeIds([]);
     } catch (err) {
       console.error('Error clearing shapes:', err);
       setError(err.message);
@@ -211,45 +234,85 @@ function useShapes(presence = {}) {
   }, []);
 
   /**
-   * Select a shape and lock it
+   * Select shapes (single or multiple)
+   * @param {string|string[]|null} shapeIds - Shape ID(s) to select, or null to deselect all
+   * @param {boolean} toggle - If true, toggle selection instead of replacing
+   */
+  const selectShapes = useCallback(async (shapeIds, toggle = false) => {
+    try {
+      // Handle null (deselect all)
+      if (shapeIds === null) {
+        setSelectedShapeIds([]);
+        // Unlock in background
+        Promise.all(selectedShapeIds.map(id => unlockShapeService(id))).catch(err =>
+          console.error('Error unlocking shapes:', err)
+        );
+        return;
+      }
+
+      // Normalize to array
+      const idsToSelect = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
+      
+      if (toggle) {
+        // Toggle mode: add/remove from selection
+        const newSelection = [...selectedShapeIds];
+        
+        for (const id of idsToSelect) {
+          const index = newSelection.indexOf(id);
+          if (index >= 0) {
+            // Already selected, remove it
+            newSelection.splice(index, 1);
+            // Unlock in background
+            unlockShapeService(id).catch(err => console.error('Error unlocking shape:', err));
+          } else {
+            // Not selected, add it optimistically
+            newSelection.push(id);
+            // Lock in background
+            lockShapeService(id).then(success => {
+              if (!success) {
+                // Lock failed, remove from selection
+                setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+              }
+            }).catch(err => console.error('Error locking shape:', err));
+          }
+        }
+        
+        setSelectedShapeIds(newSelection);
+      } else {
+        // Replace mode: replace current selection
+        // Update UI immediately
+        setSelectedShapeIds(idsToSelect);
+        
+        // Unlock previously selected shapes that aren't in the new selection (in background)
+        const shapesToUnlock = selectedShapeIds.filter(id => !idsToSelect.includes(id));
+        Promise.all(shapesToUnlock.map(id => unlockShapeService(id))).catch(err =>
+          console.error('Error unlocking shapes:', err)
+        );
+        
+        // Lock newly selected shapes (in background)
+        const shapesToLock = idsToSelect.filter(id => !selectedShapeIds.includes(id));
+        shapesToLock.forEach(id => {
+          lockShapeService(id).then(success => {
+            if (!success) {
+              // Lock failed, remove from selection
+              setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+              console.log('Could not lock shape:', id);
+            }
+          }).catch(err => console.error('Error locking shape:', err));
+        });
+      }
+    } catch (err) {
+      console.error('Error in selectShapes:', err);
+    }
+  }, [selectedShapeIds]);
+
+  /**
+   * Select a single shape (for backward compatibility)
    * @param {string|null} shapeId - Shape ID to select, or null to deselect
    */
   const selectShape = useCallback(async (shapeId) => {
-    try {
-      // If deselecting (shapeId is null), unlock the previously selected shape
-      if (shapeId === null && selectedShapeId) {
-        await unlockShapeService(selectedShapeId);
-        setSelectedShapeId(null);
-        return;
-      }
-
-      // If selecting the same shape, do nothing
-      if (shapeId === selectedShapeId) {
-        return;
-      }
-
-      // Unlock previously selected shape if there is one
-      if (selectedShapeId && selectedShapeId !== shapeId) {
-        await unlockShapeService(selectedShapeId);
-      }
-
-      // Lock the newly selected shape
-      if (shapeId) {
-        const success = await lockShapeService(shapeId);
-        if (success) {
-          setSelectedShapeId(shapeId);
-        } else {
-          console.log('Could not lock shape for selection');
-          setSelectedShapeId(null);
-        }
-      } else {
-        setSelectedShapeId(null);
-      }
-    } catch (err) {
-      console.error('Error in selectShape:', err);
-      setSelectedShapeId(null);
-    }
-  }, [selectedShapeId]);
+    await selectShapes(shapeId, false);
+  }, [selectShapes]);
 
   /**
    * Check if a shape is locked by another user
@@ -303,8 +366,8 @@ function useShapes(presence = {}) {
     // Lock the shape and select it
     const success = await lockShape(shapeId);
     if (success) {
-      // Use setSelectedShapeId directly to avoid the async selectShape logic
-      setSelectedShapeId(shapeId);
+      // Use setSelectedShapeIds directly to avoid the async selectShapes logic
+      setSelectedShapeIds([shapeId]);
     }
     return success;
   }, [isLockedByOther, isLockedByMe, lockShape]);
@@ -336,17 +399,20 @@ function useShapes(presence = {}) {
     shapes,
     loading,
     error,
-    selectedShapeId,
+    selectedShapeIds,
+    selectedShapeId: selectedShapeIds[0] || null, // For backward compatibility
     
     // Methods
     createShape,
     updateShape,
     deleteShape,
+    deleteMultipleShapes,
     clearAllShapes,
     clearAllLocks,
     lockShape,
     unlockShape,
     selectShape,
+    selectShapes,
     
     // Helpers
     isLockedByOther,

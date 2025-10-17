@@ -31,12 +31,15 @@ function Canvas() {
     shapes,
     loading,
     error,
+    selectedShapeIds,
     selectedShapeId,
     createShape,
     updateShape,
     deleteShape,
+    deleteMultipleShapes,
     clearAllShapes,
     selectShape,
+    selectShapes,
     unlockShape,
     isLockedByOther,
     handleDragStart: handleShapeDragStart,
@@ -65,6 +68,12 @@ function Canvas() {
   
   const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
   const [selectedColor, setSelectedColor] = useState(DEFAULT_SHAPE_COLOR);
+  
+  // Multi-select state
+  const [isCtrlPressed, setIsCtrlPressed] = useState(false);
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+  const [selectionBox, setSelectionBox] = useState(null); // { x1, y1, x2, y2 }
+  const [isDrawingSelection, setIsDrawingSelection] = useState(false);
   
   // Text editing state
   const [isEditingText, setIsEditingText] = useState(false);
@@ -109,19 +118,22 @@ function Canvas() {
     return () => clearTimeout(timer);
   }, [fitToView, dimensions]);
 
-  // Attach transformer to selected shape (hide during text editing)
+  // Attach transformer to selected shapes (hide during text editing)
   useEffect(() => {
-    if (transformerRef.current && selectedShapeId && !isEditingText) {
-      const selectedNode = shapeRefs.current[selectedShapeId];
-      if (selectedNode) {
-        transformerRef.current.nodes([selectedNode]);
+    if (transformerRef.current && selectedShapeIds.length > 0 && !isEditingText) {
+      const selectedNodes = selectedShapeIds
+        .map(id => shapeRefs.current[id])
+        .filter(node => node !== undefined);
+      
+      if (selectedNodes.length > 0) {
+        transformerRef.current.nodes(selectedNodes);
         transformerRef.current.getLayer().batchDraw();
       }
     } else if (transformerRef.current) {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [selectedShapeId, shapes, isEditingText]);
+  }, [selectedShapeIds, shapes, isEditingText]);
 
   // Update text editing position when canvas zooms or pans
   useEffect(() => {
@@ -147,6 +159,43 @@ function Canvas() {
     };
   }, []);
 
+  // Track Ctrl/Cmd and Shift key state for multi-select
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        setIsCtrlPressed(true);
+      }
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true);
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        setIsCtrlPressed(false);
+      }
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    // Reset on blur
+    const handleBlur = () => {
+      setIsCtrlPressed(false);
+      setIsShiftPressed(false);
+    };
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
   // Handle keyboard events (Delete to delete, Escape to deselect)
   useEffect(() => {
     const handleKeyDown = async (e) => {
@@ -155,33 +204,40 @@ function Canvas() {
         return;
       }
 
-      // Escape key - deselect active shape
-      if (e.key === 'Escape' && selectedShapeId) {
+      // Escape key - deselect all shapes
+      if (e.key === 'Escape' && selectedShapeIds.length > 0) {
         selectShape(null);
-        console.log('Shape deselected with Escape key');
+        console.log('Shapes deselected with Escape key');
         return;
       }
 
-      // Delete or Backspace key - delete selected shape
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
-        // Check if shape is locked
-        if (isLockedByOther(selectedShapeId)) {
-          console.log('Cannot delete - shape is locked by another user');
+      // Delete or Backspace key - delete selected shapes
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeIds.length > 0) {
+        // Filter out shapes locked by others
+        const shapesToDelete = selectedShapeIds.filter(id => !isLockedByOther(id));
+        
+        if (shapesToDelete.length === 0) {
+          console.log('Cannot delete - all shapes are locked by other users');
           return;
         }
 
         try {
-          await deleteShape(selectedShapeId);
-          console.log('Shape deleted with keyboard:', selectedShapeId);
+          if (shapesToDelete.length === 1) {
+            await deleteShape(shapesToDelete[0]);
+            console.log('Shape deleted with keyboard:', shapesToDelete[0]);
+          } else {
+            await deleteMultipleShapes(shapesToDelete);
+            console.log('Shapes deleted with keyboard:', shapesToDelete.length);
+          }
         } catch (err) {
-          console.error('Failed to delete shape:', err);
+          console.error('Failed to delete shapes:', err);
         }
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeId, isLockedByOther, deleteShape, selectShape]);
+  }, [selectedShapeIds, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape]);
 
   /**
    * Create a shape at the given position
@@ -392,15 +448,23 @@ function Canvas() {
         console.error('Failed to delete shape:', err);
       }
     } else {
-      // Otherwise, select the shape for color editing
+      // Check if shape is locked by another user
       if (isLockedByOther(shape.id)) {
         console.log('Cannot select - shape is locked by another user');
         return;
       }
       
-      selectShape(shape.id);
-      setSelectedColor(shape.fill);
-      console.log('Shape selected:', shape.id);
+      // Handle multi-select with Ctrl/Cmd key
+      if (isCtrlPressed) {
+        // Toggle selection
+        await selectShapes(shape.id, true);
+        console.log('Shape toggled in selection:', shape.id);
+      } else {
+        // Single selection
+        await selectShape(shape.id);
+        setSelectedColor(shape.fill);
+        console.log('Shape selected:', shape.id);
+      }
     }
   };
   
@@ -436,16 +500,24 @@ function Canvas() {
   const handleColorChange = async (newColor) => {
     setSelectedColor(newColor);
     
-    // If a shape is selected, update its color
-    if (selectedShapeId) {
-      const shape = shapes.find(s => s.id === selectedShapeId);
-      if (shape && !isLockedByOther(selectedShapeId)) {
-        try {
-          await updateShape(selectedShapeId, { fill: newColor });
-          console.log('Shape color updated:', selectedShapeId, newColor);
-        } catch (err) {
-          console.error('Failed to update shape color:', err);
-        }
+    // If shapes are selected, update their colors
+    if (selectedShapeIds.length > 0) {
+      // Filter out shapes locked by others
+      const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
+      
+      if (shapesToUpdate.length === 0) {
+        console.log('Cannot update color - all shapes are locked by other users');
+        return;
+      }
+
+      try {
+        // Update all selected shapes
+        await Promise.all(
+          shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
+        );
+        console.log('Shapes color updated:', shapesToUpdate.length, newColor);
+      } catch (err) {
+        console.error('Failed to update shapes color:', err);
       }
     }
   };
@@ -468,10 +540,118 @@ function Canvas() {
       return;
     }
     
-    // If we didn't click on a shape and have a selection, deselect it
-    if (!clickedOnShape && selectedShapeId) {
+    // If we didn't click on a shape and have a selection, deselect it (unless Ctrl is pressed)
+    if (!clickedOnShape && selectedShapeIds.length > 0 && !isCtrlPressed) {
       selectShape(null);
-      console.log('Shape deselected');
+      console.log('Shapes deselected');
+    }
+  };
+
+  /**
+   * Handle mouse down on canvas for selection box (Shift+Drag)
+   */
+  const handleCanvasMouseDown = (e) => {
+    // Only start selection box on Shift+Drag
+    if (!isShiftPressed) return;
+    
+    // Don't start selection box if clicking on a shape
+    const clickedOnShape = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
+    if (clickedOnShape) return;
+
+    const stage = stageRef.current;
+    const pointerPosition = stage.getPointerPosition();
+    const canvasPos = screenToCanvas(stage, pointerPosition);
+
+    setIsDrawingSelection(true);
+    setSelectionBox({
+      x1: canvasPos.x,
+      y1: canvasPos.y,
+      x2: canvasPos.x,
+      y2: canvasPos.y,
+    });
+  };
+
+  /**
+   * Handle mouse move on canvas for selection box
+   */
+  const handleCanvasMouseMove = (e) => {
+    if (!isDrawingSelection || !selectionBox) return;
+
+    const stage = stageRef.current;
+    const pointerPosition = stage.getPointerPosition();
+    const canvasPos = screenToCanvas(stage, pointerPosition);
+
+    setSelectionBox(prev => ({
+      ...prev,
+      x2: canvasPos.x,
+      y2: canvasPos.y,
+    }));
+  };
+
+  /**
+   * Handle mouse up on canvas for selection box
+   */
+  const handleCanvasMouseUp = async () => {
+    if (!isDrawingSelection || !selectionBox) return;
+
+    setIsDrawingSelection(false);
+
+    // Calculate selection box bounds
+    const x1 = Math.min(selectionBox.x1, selectionBox.x2);
+    const y1 = Math.min(selectionBox.y1, selectionBox.y2);
+    const x2 = Math.max(selectionBox.x1, selectionBox.x2);
+    const y2 = Math.max(selectionBox.y1, selectionBox.y2);
+
+    // Find shapes within selection box
+    const shapesInBox = shapes.filter(shape => {
+      // Get shape bounds
+      let shapeX1, shapeY1, shapeX2, shapeY2;
+      
+      if (shape.type === SHAPE_TYPES.CIRCLE) {
+        // For circles, x/y is center
+        const radius = Math.max(shape.width, shape.height) / 2;
+        shapeX1 = shape.x - radius;
+        shapeY1 = shape.y - radius;
+        shapeX2 = shape.x + radius;
+        shapeY2 = shape.y + radius;
+      } else if (shape.type === SHAPE_TYPES.TEXT) {
+        // For text, approximate bounds
+        shapeX1 = shape.x;
+        shapeY1 = shape.y;
+        shapeX2 = shape.x + 100; // Approximate
+        shapeY2 = shape.y + (shape.fontSize || 24);
+      } else {
+        // For rectangles, x/y is top-left
+        shapeX1 = shape.x;
+        shapeY1 = shape.y;
+        shapeX2 = shape.x + shape.width;
+        shapeY2 = shape.y + shape.height;
+      }
+
+      // Check if shape intersects with selection box
+      return !(shapeX2 < x1 || shapeX1 > x2 || shapeY2 < y1 || shapeY1 > y2);
+    });
+
+    // Filter out shapes locked by others
+    const selectableShapes = shapesInBox
+      .map(s => s.id)
+      .filter(id => !isLockedByOther(id));
+
+    // Clear selection box immediately for instant feedback
+    setSelectionBox(null);
+
+    if (selectableShapes.length > 0) {
+      if (isCtrlPressed) {
+        // Add to existing selection
+        const newSelection = [...new Set([...selectedShapeIds, ...selectableShapes])];
+        // Don't await - let it happen in background for instant UI feedback
+        selectShapes(newSelection, false);
+      } else {
+        // Replace selection
+        // Don't await - let it happen in background for instant UI feedback
+        selectShapes(selectableShapes, false);
+      }
+      console.log('Selected shapes in box:', selectableShapes.length);
     }
   };
   
@@ -609,7 +789,7 @@ function Canvas() {
   };
 
   /**
-   * Handle mouse move to update cursor position
+   * Handle mouse move to update cursor position and selection box
    */
   const handleMouseMove = (e) => {
     const stage = stageRef.current;
@@ -624,6 +804,9 @@ function Canvas() {
     
     // Update cursor position in Realtime Database (throttled in hook)
     updateCursorPosition(canvasPos.x, canvasPos.y);
+
+    // Update selection box if drawing
+    handleCanvasMouseMove(e);
   };
 
   /**
@@ -647,12 +830,12 @@ function Canvas() {
   };
 
   /**
-   * Handle transform start - lock the shape
+   * Handle transform start - lock the shapes
    */
   const handleTransformStart = async () => {
-    if (!selectedShapeId) return;
+    if (selectedShapeIds.length === 0) return;
     
-    // Mark that we're transforming a shape
+    // Mark that we're transforming shapes
     isDraggingShapeRef.current = true;
     
     // Disable stage dragging during transformation
@@ -660,11 +843,12 @@ function Canvas() {
       stageRef.current.draggable(false);
     }
     
-    // Try to lock the shape
-    const success = await handleShapeDragStart(selectedShapeId);
+    // Shapes should already be locked since they're selected
+    // Just verify they're locked
+    const allLocked = selectedShapeIds.every(id => !isLockedByOther(id));
     
-    // If couldn't lock, cancel the transform
-    if (!success && transformerRef.current) {
+    // If any couldn't be locked, cancel the transform
+    if (!allLocked && transformerRef.current) {
       transformerRef.current.nodes([]);
       selectShape(null);
       isDraggingShapeRef.current = false;
@@ -676,17 +860,20 @@ function Canvas() {
   };
 
   /**
-   * Handle transform end - update shape and unlock
+   * Handle transform end - update shapes
    */
   const handleTransformEnd = async (e) => {
-    if (!selectedShapeId) return;
+    if (selectedShapeIds.length === 0) return;
     
     const node = e.target;
-    const shape = shapes.find(s => s.id === selectedShapeId);
     
-    if (!shape) return;
-
     try {
+      // Find which shape was transformed
+      const transformedShapeId = node.attrs?.id;
+      const shape = shapes.find(s => s.id === transformedShapeId);
+      
+      if (!shape) return;
+
       // Get the transformed dimensions and rotation
       const updates = {
         x: node.x(),
@@ -725,27 +912,19 @@ function Canvas() {
         node.scaleY(1);
       } else if (shape.type === SHAPE_TYPES.TEXT) {
         // For text, preserve independent scaleX and scaleY for distortion
-        // The node already has the accumulated scale (from prop + transformer delta)
-        // So we can use it directly
         const newScaleX = node.scaleX();
         const newScaleY = node.scaleY();
         
         updates.scaleX = newScaleX;
         updates.scaleY = newScaleY;
-        
-        // Node already has the correct scale, no need to update it
-        // (this prevents flicker since it stays consistent until React re-renders)
       }
 
       // Update shape in Firestore
-      await updateShape(selectedShapeId, updates);
+      await updateShape(transformedShapeId, updates);
       
-      // Don't unlock - the shape remains selected and locked
-      
-      console.log('Shape transformed:', selectedShapeId, updates);
+      console.log('Shape transformed:', transformedShapeId, updates);
     } catch (err) {
       console.error('Failed to update shape after transform:', err);
-      // Don't unlock on error - shape remains selected
     } finally {
       // Mark that we're done transforming
       isDraggingShapeRef.current = false;
@@ -857,9 +1036,9 @@ function Canvas() {
             ? ' Click shapes to delete' 
             : selectedTool === TOOL_TYPES.TEXT
             ? ' Click to add text • Double-click text to edit'
-            : selectedShapeId
-            ? ' Selected shape - change color in toolbar'
-            : ` Double-click to create ${selectedTool} • Click shapes to edit`}
+            : selectedShapeIds.length > 0
+            ? ` ${selectedShapeIds.length} shape${selectedShapeIds.length > 1 ? 's' : ''} selected • Ctrl+Click to multi-select • Shift+Drag to select area`
+            : ` Double-click to create ${selectedTool} • Click to select • Ctrl+Click to multi-select • Shift+Drag to select area`}
         </p>
       </div>
 
@@ -882,12 +1061,14 @@ function Canvas() {
         y={stagePosition.y}
         scaleX={stageScale}
         scaleY={stageScale}
-        draggable={true}
+        draggable={!isDrawingSelection}
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
+        onMouseDown={handleCanvasMouseDown}
+        onMouseUp={handleCanvasMouseUp}
         onDragStart={(e) => {
-          // Only allow canvas drag if we're not dragging a shape
-          if (!isDraggingShapeRef.current) {
+          // Only allow canvas drag if we're not dragging a shape or drawing selection
+          if (!isDraggingShapeRef.current && !isDrawingSelection) {
             handleCanvasDragStart(e);
           }
         }}
@@ -979,7 +1160,7 @@ function Canvas() {
           <Rect x={CANVAS_CONFIG.WIDTH - 150} y={CANVAS_CONFIG.HEIGHT - 150} width={100} height={100} fill="#FFA07A" opacity={0.3} cornerRadius={10} />
         </Layer>
 
-        {/* Shapes Layer */}
+          {/* Shapes Layer */}
         <Layer>
           {/* Real-time shapes from Firestore */}
           {shapes.map((shape) => {
@@ -997,7 +1178,7 @@ function Canvas() {
               <Shape
                 key={shape.id}
                 shapeData={shape}
-                isSelected={shape.id === selectedShapeId}
+                isSelected={selectedShapeIds.includes(shape.id)}
                 isLocked={isLockedByOther(shape.id)}
                 lockerColor={lockerColor}
                 lockerName={lockerName}
@@ -1017,7 +1198,7 @@ function Canvas() {
             );
           })}
           
-          {/* Transformer for selected shape */}
+          {/* Transformer for selected shapes */}
           <Transformer
             ref={transformerRef}
             onTransformStart={handleTransformStart}
@@ -1029,6 +1210,21 @@ function Canvas() {
               'bottom-left', 'bottom-center', 'bottom-right'
             ]}
           />
+
+          {/* Selection Box */}
+          {selectionBox && (
+            <Rect
+              x={Math.min(selectionBox.x1, selectionBox.x2)}
+              y={Math.min(selectionBox.y1, selectionBox.y2)}
+              width={Math.abs(selectionBox.x2 - selectionBox.x1)}
+              height={Math.abs(selectionBox.y2 - selectionBox.y1)}
+              fill="rgba(0, 102, 255, 0.1)"
+              stroke="#0066ff"
+              strokeWidth={2}
+              dash={[5, 5]}
+              listening={false}
+            />
+          )}
         </Layer>
 
         {/* Cursors Layer - rendered on top of shapes */}

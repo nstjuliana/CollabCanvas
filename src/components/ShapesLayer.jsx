@@ -10,6 +10,7 @@ function ShapesLayer({
   transformerRef,
   shapeRefs,
   selectionBox,
+  selectionPreviewIds,
   onShapeDragStart,
   onShapeDragEnd,
   onShapeClick,
@@ -39,6 +40,7 @@ function ShapesLayer({
             shapeData={shape}
             isSelected={selectedShapeIds.includes(shape.id)}
             isLocked={isLockedByOther(shape.id)}
+            isInSelectionPreview={selectionPreviewIds.includes(shape.id)}
             lockerColor={lockerColor}
             lockerName={lockerName}
             stageScale={stageScale}

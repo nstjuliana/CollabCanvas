@@ -85,6 +85,7 @@ function Canvas() {
   const [isShiftPressed, setIsShiftPressed] = useState(false);
   const [selectionBox, setSelectionBox] = useState(null); // { x1, y1, x2, y2 }
   const [isDrawingSelection, setIsDrawingSelection] = useState(false);
+  const [selectionPreviewIds, setSelectionPreviewIds] = useState([]); // Shapes currently in selection box
   
   // Image upload state
   const [isUploadingImage, setIsUploadingImage] = useState(false);
@@ -538,6 +539,38 @@ function Canvas() {
   };
 
   /**
+   * Check if a shape is within a selection box
+   */
+  const isShapeInBox = (shape, x1, y1, x2, y2) => {
+    // Get shape bounds
+    let shapeX1, shapeY1, shapeX2, shapeY2;
+    
+    if (shape.type === SHAPE_TYPES.CIRCLE) {
+      // For circles, x/y is center
+      const radius = Math.max(shape.width, shape.height) / 2;
+      shapeX1 = shape.x - radius;
+      shapeY1 = shape.y - radius;
+      shapeX2 = shape.x + radius;
+      shapeY2 = shape.y + radius;
+    } else if (shape.type === SHAPE_TYPES.TEXT) {
+      // For text, approximate bounds
+      shapeX1 = shape.x;
+      shapeY1 = shape.y;
+      shapeX2 = shape.x + 100; // Approximate
+      shapeY2 = shape.y + (shape.fontSize || 24);
+    } else {
+      // For rectangles and images, x/y is top-left
+      shapeX1 = shape.x;
+      shapeY1 = shape.y;
+      shapeX2 = shape.x + shape.width;
+      shapeY2 = shape.y + shape.height;
+    }
+
+    // Check if shape intersects with selection box
+    return !(shapeX2 < x1 || shapeX1 > x2 || shapeY2 < y1 || shapeY1 > y2);
+  };
+
+  /**
    * Handle mouse move on canvas for selection box
    */
   const handleCanvasMouseMove = (e) => {
@@ -547,11 +580,26 @@ function Canvas() {
     const pointerPosition = stage.getPointerPosition();
     const canvasPos = screenToCanvas(stage, pointerPosition);
 
-    setSelectionBox(prev => ({
-      ...prev,
+    const newBox = {
+      ...selectionBox,
       x2: canvasPos.x,
       y2: canvasPos.y,
-    }));
+    };
+
+    setSelectionBox(newBox);
+
+    // Calculate preview of shapes in selection box
+    const x1 = Math.min(newBox.x1, newBox.x2);
+    const y1 = Math.min(newBox.y1, newBox.y2);
+    const x2 = Math.max(newBox.x1, newBox.x2);
+    const y2 = Math.max(newBox.y1, newBox.y2);
+
+    const shapesInBox = shapes
+      .filter(shape => isShapeInBox(shape, x1, y1, x2, y2))
+      .map(s => s.id)
+      .filter(id => !isLockedByOther(id));
+
+    setSelectionPreviewIds(shapesInBox);
   };
 
   /**
@@ -568,43 +616,17 @@ function Canvas() {
     const x2 = Math.max(selectionBox.x1, selectionBox.x2);
     const y2 = Math.max(selectionBox.y1, selectionBox.y2);
 
-    // Find shapes within selection box
-    const shapesInBox = shapes.filter(shape => {
-      // Get shape bounds
-      let shapeX1, shapeY1, shapeX2, shapeY2;
-      
-      if (shape.type === SHAPE_TYPES.CIRCLE) {
-        // For circles, x/y is center
-        const radius = Math.max(shape.width, shape.height) / 2;
-        shapeX1 = shape.x - radius;
-        shapeY1 = shape.y - radius;
-        shapeX2 = shape.x + radius;
-        shapeY2 = shape.y + radius;
-      } else if (shape.type === SHAPE_TYPES.TEXT) {
-        // For text, approximate bounds
-        shapeX1 = shape.x;
-        shapeY1 = shape.y;
-        shapeX2 = shape.x + 100; // Approximate
-        shapeY2 = shape.y + (shape.fontSize || 24);
-      } else {
-        // For rectangles, x/y is top-left
-        shapeX1 = shape.x;
-        shapeY1 = shape.y;
-        shapeX2 = shape.x + shape.width;
-        shapeY2 = shape.y + shape.height;
-      }
-
-      // Check if shape intersects with selection box
-      return !(shapeX2 < x1 || shapeX1 > x2 || shapeY2 < y1 || shapeY1 > y2);
-    });
+    // Find shapes within selection box using helper
+    const shapesInBox = shapes.filter(shape => isShapeInBox(shape, x1, y1, x2, y2));
 
     // Filter out shapes locked by others
     const selectableShapes = shapesInBox
       .map(s => s.id)
       .filter(id => !isLockedByOther(id));
 
-    // Clear selection box immediately for instant feedback
+    // Clear selection box and preview immediately for instant feedback
     setSelectionBox(null);
+    setSelectionPreviewIds([]);
 
     if (selectableShapes.length > 0) {
       if (isCtrlPressed) {
@@ -1034,6 +1056,7 @@ function Canvas() {
           transformerRef={transformerRef}
           shapeRefs={shapeRefs}
           selectionBox={selectionBox}
+          selectionPreviewIds={selectionPreviewIds}
           onShapeDragStart={onShapeDragStart}
           onShapeDragEnd={onShapeDragEnd}
           onShapeClick={onShapeClick}

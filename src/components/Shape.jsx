@@ -169,6 +169,7 @@ function Shape({
   shapeData,
   isSelected = false,
   isLocked = false,
+  isInSelectionPreview = false,
   lockerColor = null,
   lockerName = null,
   stageScale = 1,
@@ -224,6 +225,9 @@ function Shape({
   // Calculate stroke width - only apply inverse scaling to locked shapes
   const inverseScale = 1 / stageScale;
   
+  // Combine hover state with selection preview
+  const showHoverEffect = isHovering || isInSelectionPreview;
+  
   // Determine stroke width based on state
   let finalStrokeWidth;
   if (isLocked) {
@@ -232,11 +236,11 @@ function Shape({
   } else if (isSelected) {
     // Selected shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth + 2;
-  } else if (isHovering && type === SHAPE_TYPES.IMAGE) {
-    // Hovering images: use fixed stroke width regardless of zoom or image scale
+  } else if (showHoverEffect && type === SHAPE_TYPES.IMAGE) {
+    // Hovering/preview images: use fixed stroke width regardless of zoom or image scale
     finalStrokeWidth = 4;
-  } else if (isHovering) {
-    // Hovering shapes: slightly thicker stroke to indicate interactivity
+  } else if (showHoverEffect) {
+    // Hovering/preview shapes: slightly thicker stroke to indicate interactivity
     finalStrokeWidth = strokeWidth + 19.5;
   } else {
     // Regular shapes: normal scaling (zoom-dependent)
@@ -249,9 +253,9 @@ function Shape({
     x,
     y,
     fill,
-    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : (isHovering ? '#000000' : stroke))),
+    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : (showHoverEffect ? '#000000' : stroke))),
     strokeWidth: finalStrokeWidth,
-    opacity: isLocked ? opacity * 0.5 : (isHovering ? 1.0 : opacity),
+    opacity: isLocked ? opacity * 0.5 : (showHoverEffect ? 1.0 : opacity),
     rotation,
     scaleX,
     scaleY,
@@ -361,7 +365,7 @@ function Shape({
             opacity={opacity}
             isSelected={isSelected}
             isLocked={isLocked}
-            isHovering={isHovering}
+            isHovering={showHoverEffect}
             lockerColor={lockerColor}
             finalStrokeWidth={textStrokeWidth}
             textScaleX={scaleX}
@@ -381,12 +385,12 @@ function Shape({
             height={height}
             isSelected={isSelected}
             isLocked={isLocked}
-            isHovering={isHovering}
+            isHovering={showHoverEffect}
             lockerColor={lockerColor}
             finalStrokeWidth={finalStrokeWidth}
           />
           {/* Border for selected/locked images */}
-          {(isSelected || isLocked || isHovering) && (
+          {(isSelected || isLocked || showHoverEffect) && (
             <Rect
               x={0}
               y={0}

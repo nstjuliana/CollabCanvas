@@ -125,10 +125,14 @@ function Canvas() {
 
   // Update text editing position when canvas zooms or pans
   useEffect(() => {
-    if (isEditingText) {
+    if (isEditingText && stageRef.current) {
+      // Get current stage transform directly
+      const currentScale = stageRef.current.scaleX();
+      const currentPosition = stageRef.current.position();
+      
       // Recalculate screen position from canvas position
-      const screenX = editingTextCanvasPosition.x * stageScale + stagePosition.x;
-      const screenY = editingTextCanvasPosition.y * stageScale + stagePosition.y;
+      const screenX = editingTextCanvasPosition.x * currentScale + currentPosition.x;
+      const screenY = editingTextCanvasPosition.y * currentScale + currentPosition.y;
       setEditingTextPosition({ x: screenX, y: screenY });
     }
   }, [stageScale, stagePosition, isEditingText, editingTextCanvasPosition]);
@@ -493,13 +497,16 @@ function Canvas() {
       }
     }
     
+    // Get current stage transform directly from the stage (most up-to-date)
+    const currentScale = stage.scaleX();
+    const currentPosition = stage.position();
+    
     // Store canvas coordinates (not screen coordinates)
     setEditingTextCanvasPosition({ x, y });
     
     // Convert canvas position to screen position for textarea
-    const scale = stageScale;
-    const screenX = x * scale + stagePosition.x;
-    const screenY = y * scale + stagePosition.y;
+    const screenX = x * currentScale + currentPosition.x;
+    const screenY = y * currentScale + currentPosition.y;
     
     // Capture transformation properties for inline editing
     const transform = {
@@ -1034,11 +1041,33 @@ function Canvas() {
       
       {/* Text editing overlay - positioned and transformed to match text */}
       {isEditingText && (() => {
-        // Calculate the actual visual dimensions (text dimensions * scale * stage zoom)
-        const visualWidth = editingTextTransform.width * editingTextTransform.scaleX * stageScale;
-        const visualHeight = editingTextTransform.height * editingTextTransform.scaleY * stageScale;
+        // Get current stage scale directly for accurate sizing
+        const currentScale = stageRef.current ? stageRef.current.scaleX() : stageScale;
+        
         const avgScale = (editingTextTransform.scaleX + editingTextTransform.scaleY) / 2;
-        const visualFontSize = editingTextTransform.fontSize * avgScale * stageScale;
+        const visualFontSize = editingTextTransform.fontSize * avgScale * currentScale;
+        
+        // Calculate dynamic dimensions based on content
+        const lines = editingTextValue.split('\n');
+        const lineCount = lines.length || 1;
+        
+        // Measure actual text width using canvas
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.font = `${visualFontSize}px ${SHAPE_DEFAULTS.TEXT_FONT_FAMILY}`;
+        
+        // Get the width of the longest line
+        let maxWidth = 0;
+        lines.forEach(line => {
+          const metrics = ctx.measureText(line);
+          maxWidth = Math.max(maxWidth, metrics.width);
+        });
+        
+        // Add small padding for cursor
+        const padding = 4;
+        const minWidth = visualFontSize;
+        const dynamicWidth = Math.max(maxWidth + padding, minWidth);
+        const dynamicHeight = Math.max(lineCount * visualFontSize * 1.2, visualFontSize * 1.2);
         
         return (
           <textarea
@@ -1071,13 +1100,13 @@ function Canvas() {
               resize: 'none',
               overflow: 'hidden',
               whiteSpace: 'pre',
-              lineHeight: '1',
+              lineHeight: '1.2',
               transformOrigin: 'top left',
               transform: `rotate(${editingTextTransform.rotation}deg)`,
               zIndex: 1000,
               boxSizing: 'border-box',
-              width: `${visualWidth}px`,
-              height: `${visualHeight}px`,
+              width: `${dynamicWidth}px`,
+              height: `${dynamicHeight}px`,
               minWidth: '20px',
               minHeight: '20px',
             }}

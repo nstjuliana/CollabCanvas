@@ -4,7 +4,7 @@ import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
 
 /**
  * TextShape Component  
- * Renders text with a bounding box for visual feedback when locked by others
+ * Renders text with a bounding box for visual feedback when locked by others or hovering
  * Note: Scale is applied to the parent Group, not this component
  */
 function TextShape({ 
@@ -15,6 +15,7 @@ function TextShape({
   opacity, 
   isSelected, 
   isLocked, 
+  isHovering,
   lockerColor,
   finalStrokeWidth,
   textScaleX,
@@ -45,16 +46,16 @@ function TextShape({
   
   return (
     <>
-      {/* Bounding box rectangle for locked state only (not when just selected) */}
-      {/* For text, we only show the box when locked by another user */}
-      {isLocked && textDimensions.width > 0 && (
+      {/* Bounding box rectangle for locked state or hovering */}
+      {/* For text, we show the box when locked by another user or when hovering */}
+      {(isLocked || isHovering) && textDimensions.width > 0 && (
         <KonvaRect
           x={0}
           y={0}
           width={textDimensions.width}
           height={textDimensions.height}
           fill="transparent"
-          stroke={lockerColor || '#999999'}
+          stroke={isLocked ? (lockerColor || '#999999') : (isHovering ? '#000000' : '#333333')}
           strokeWidth={finalStrokeWidth}
           listening={false}
         />
@@ -139,7 +140,7 @@ function Shape({
         } else if (isSelected) {
           container.style.cursor = 'move';
         } else if (type === SHAPE_TYPES.TEXT) {
-          container.style.cursor = 'text';
+          container.style.cursor = 'move';
         } else {
           container.style.cursor = 'grab';
         }
@@ -158,6 +159,9 @@ function Shape({
   } else if (isSelected) {
     // Selected shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth + 2;
+  } else if (isHovering) {
+    // Hovering shapes: slightly thicker stroke to indicate interactivity
+    finalStrokeWidth = strokeWidth + 19.5;
   } else {
     // Regular shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth;
@@ -169,9 +173,9 @@ function Shape({
     x,
     y,
     fill,
-    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : stroke)),
+    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : (isHovering ? '#000000' : stroke))),
     strokeWidth: finalStrokeWidth,
-    opacity: isLocked ? opacity * 0.5 : opacity,
+    opacity: isLocked ? opacity * 0.5 : (isHovering ? 1.0 : opacity),
     rotation,
     draggable: !isLocked,
     ref: (node) => {
@@ -258,6 +262,10 @@ function Shape({
       break;
 
     case SHAPE_TYPES.TEXT:
+      // For text, we need to inverse-scale the stroke width since it's inside a scaled Group
+      const avgTextScale = (scaleX + scaleY) / 2;
+      const textStrokeWidth = finalStrokeWidth / avgTextScale;
+      
       shapeElement = (
         <Group
           {...commonProps}
@@ -275,8 +283,9 @@ function Shape({
             opacity={opacity}
             isSelected={isSelected}
             isLocked={isLocked}
+            isHovering={isHovering}
             lockerColor={lockerColor}
-            finalStrokeWidth={finalStrokeWidth}
+            finalStrokeWidth={textStrokeWidth}
             textScaleX={scaleX}
             textScaleY={scaleY}
             shapeRef={null}

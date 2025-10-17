@@ -252,3 +252,4 @@ That's it! The LLM will automatically learn to use it.
 
 **Your canvas app is now AI-ready! 🎉**
 
+

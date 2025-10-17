@@ -12,6 +12,15 @@ import { screenToCanvas, getRandomColor } from '../utils/helpers';
 import { uploadImage, loadImage, calculateScaledDimensions } from '../services/images';
 import './Canvas.css';
 
+import Toolbar from './Toolbar';
+import CanvasInstructions from './CanvasInstructions';
+import ShapeCount from './ShapeCount';
+import TextEditor from './TextEditor';
+import UploadIndicator from './UploadIndicator';
+import BackgroundLayer from './BackgroundLayer';
+import ShapesLayer from './ShapesLayer';
+import CursorsLayer from './CursorsLayer';
+
 function Canvas() {
   const {
     stageRef,
@@ -212,7 +221,6 @@ function Canvas() {
       // Escape key - deselect all shapes
       if (e.key === 'Escape' && selectedShapeIds.length > 0) {
         selectShape(null);
-        console.log('Shapes deselected with Escape key');
         return;
       }
 
@@ -222,17 +230,14 @@ function Canvas() {
         const shapesToDelete = selectedShapeIds.filter(id => !isLockedByOther(id));
         
         if (shapesToDelete.length === 0) {
-          console.log('Cannot delete - all shapes are locked by other users');
           return;
         }
 
         try {
           if (shapesToDelete.length === 1) {
             await deleteShape(shapesToDelete[0]);
-            console.log('Shape deleted with keyboard:', shapesToDelete[0]);
           } else {
             await deleteMultipleShapes(shapesToDelete);
-            console.log('Shapes deleted with keyboard:', shapesToDelete.length);
           }
         } catch (err) {
           console.error('Failed to delete shapes:', err);
@@ -298,10 +303,8 @@ function Canvas() {
       }
 
       const shapeId = await createShape(newShape);
-      console.log('Shape created at', canvasPos);
       return shapeId;
     } catch (err) {
-      console.error('Failed to create shape:', err);
       return null;
     }
   };
@@ -321,7 +324,6 @@ function Canvas() {
     
     // Don't create if clicking on an existing shape
     if (hasShapeId) {
-      console.log('Clicked on existing shape, not creating new one');
       return;
     }
 
@@ -330,7 +332,6 @@ function Canvas() {
     const pointerPosition = stage.getPointerPosition();
     const canvasPos = screenToCanvas(stage, pointerPosition);
     
-    console.log('Creating shape at', canvasPos);
     await createShapeAtPosition(canvasPos);
   };
 
@@ -359,7 +360,6 @@ function Canvas() {
       const pointerPosition = stage.getPointerPosition();
       const canvasPos = screenToCanvas(stage, pointerPosition);
       
-      console.log('Double-tap detected, creating shape at', canvasPos);
       await createShapeAtPosition(canvasPos);
       
       // Reset to prevent triple-tap from creating another shape
@@ -442,20 +442,17 @@ function Canvas() {
     // If delete tool is active, delete the shape
     if (selectedTool === TOOL_TYPES.DELETE) {
       if (isLockedByOther(shape.id)) {
-        console.log('Cannot delete - shape is locked by another user');
         return;
       }
       
       try {
         await deleteShape(shape.id);
-        console.log('Shape deleted:', shape.id);
       } catch (err) {
         console.error('Failed to delete shape:', err);
       }
     } else {
       // Check if shape is locked by another user
       if (isLockedByOther(shape.id)) {
-        console.log('Cannot select - shape is locked by another user');
         return;
       }
       
@@ -463,12 +460,10 @@ function Canvas() {
       if (isCtrlPressed) {
         // Toggle selection
         await selectShapes(shape.id, true);
-        console.log('Shape toggled in selection:', shape.id);
       } else {
         // Single selection
         await selectShape(shape.id);
         setSelectedColor(shape.fill);
-        console.log('Shape selected:', shape.id);
       }
     }
   };
@@ -484,14 +479,12 @@ function Canvas() {
     
     // Check if shape is locked by another user
     if (isLockedByOther(shape.id)) {
-      console.log('Cannot edit - text is locked by another user');
       return;
     }
     
     // Lock the shape for editing
     const success = await handleShapeDragStart(shape.id);
     if (!success) {
-      console.log('Could not lock text shape for editing');
       return;
     }
     
@@ -511,7 +504,6 @@ function Canvas() {
       const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
       
       if (shapesToUpdate.length === 0) {
-        console.log('Cannot update color - all shapes are locked by other users');
         return;
       }
 
@@ -520,7 +512,6 @@ function Canvas() {
         await Promise.all(
           shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
         );
-        console.log('Shapes color updated:', shapesToUpdate.length, newColor);
       } catch (err) {
         console.error('Failed to update shapes color:', err);
       }
@@ -548,7 +539,6 @@ function Canvas() {
     // If we didn't click on a shape and have a selection, deselect it (unless Ctrl is pressed)
     if (!clickedOnShape && selectedShapeIds.length > 0 && !isCtrlPressed) {
       selectShape(null);
-      console.log('Shapes deselected');
     }
   };
 
@@ -656,7 +646,6 @@ function Canvas() {
         // Don't await - let it happen in background for instant UI feedback
         selectShapes(selectableShapes, false);
       }
-      console.log('Selected shapes in box:', selectableShapes.length);
     }
   };
   
@@ -733,7 +722,6 @@ function Canvas() {
         // Update existing text shape
         try {
           await updateShape(editingShapeId, { text });
-          console.log('Text shape updated:', editingShapeId);
         } catch (err) {
           console.error('Failed to update text shape:', err);
         }
@@ -752,7 +740,6 @@ function Canvas() {
       // If text is empty and we're editing an existing shape, delete it
       try {
         await deleteShape(editingShapeId);
-        console.log('Empty text shape deleted:', editingShapeId);
       } catch (err) {
         console.error('Failed to delete text shape:', err);
       }
@@ -762,7 +749,6 @@ function Canvas() {
     if (wasEditingExisting && editingShapeId) {
       try {
         await unlockShape(editingShapeId);
-        console.log('Text shape unlocked after editing');
       } catch (err) {
         console.error('Failed to unlock text shape:', err);
       }
@@ -782,7 +768,6 @@ function Canvas() {
     if (editingShapeId) {
       try {
         await unlockShape(editingShapeId);
-        console.log('Text shape unlocked after canceling edit');
       } catch (err) {
         console.error('Failed to unlock text shape:', err);
       }
@@ -827,7 +812,6 @@ function Canvas() {
     if (confirmed) {
       try {
         await clearAllShapes();
-        console.log('Canvas cleared');
       } catch (err) {
         console.error('Failed to clear canvas:', err);
       }
@@ -867,7 +851,6 @@ function Canvas() {
     const imageFiles = files.filter(file => file.type.startsWith('image/'));
     
     if (imageFiles.length === 0) {
-      console.log('No image files dropped');
       return;
     }
 
@@ -886,7 +869,6 @@ function Canvas() {
     for (const file of imageFiles) {
       try {
         setIsUploadingImage(true);
-        console.log('Processing image:', file.name);
 
         // Get image dimensions from file BEFORE uploading (avoids CORS issue)
         const { width: imgWidth, height: imgHeight } = await loadImageFromFile(file);
@@ -900,9 +882,7 @@ function Canvas() {
         );
 
         // Upload to Firebase Storage
-        console.log('Uploading image:', file.name);
         const imageUrl = await uploadImage(file);
-        console.log('Upload complete:', file.name);
 
         // Create image shape at drop position
         const newShape = {
@@ -917,7 +897,6 @@ function Canvas() {
         };
 
         await createShape(newShape);
-        console.log('Image shape created:', file.name);
       } catch (err) {
         console.error('Failed to upload image:', err);
         alert(`Failed to upload ${file.name}: ${err.message}`);
@@ -1012,7 +991,6 @@ function Canvas() {
       // Update shape in Firestore
       await updateShape(transformedShapeId, updates);
       
-      console.log('Shape transformed:', transformedShapeId, updates);
     } catch (err) {
       console.error('Failed to update shape after transform:', err);
     } finally {
@@ -1033,121 +1011,24 @@ function Canvas() {
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {/* Unified Toolbar */}
-      <div className="toolbar">
-        {/* Shapes */}
-        <button
-          onClick={() => setSelectedTool(TOOL_TYPES.RECTANGLE)}
-          className={`toolbar-button ${selectedTool === TOOL_TYPES.RECTANGLE ? 'active' : ''}`}
-          title="Rectangle Tool (Double-click to create)"
-        >
-          ■
-        </button>
-        <button
-          onClick={() => setSelectedTool(TOOL_TYPES.CIRCLE)}
-          className={`toolbar-button ${selectedTool === TOOL_TYPES.CIRCLE ? 'active' : ''}`}
-          title="Circle Tool (Double-click to create)"
-        >
-          ⬤
-        </button>
-        <button
-          onClick={() => setSelectedTool(TOOL_TYPES.TEXT)}
-          className={`toolbar-button ${selectedTool === TOOL_TYPES.TEXT ? 'active' : ''}`}
-          title="Text Tool (Click to add text)"
-        >
-          T
-        </button>
-        
-        <div className="toolbar-divider"></div>
-        
-        {/* Color Picker */}
-        <ColorPicker
-          selectedColor={selectedColor}
-          onColorChange={handleColorChange}
-          disabled={false}
-        />
-        
-        <div className="toolbar-divider"></div>
-        
-        {/* Deletion Tools */}
-        <button
-          onClick={() => setSelectedTool(TOOL_TYPES.DELETE)}
-          className={`toolbar-button ${selectedTool === TOOL_TYPES.DELETE ? 'active' : ''}`}
-          title="Delete Tool (Click shapes to delete)"
-        >
-          🗑️
-        </button>
-        <button
-          onClick={handleClearCanvas}
-          className="toolbar-button"
-          disabled={shapes.length === 0}
-          title={shapes.length === 0 ? "No shapes to clear" : "Clear all shapes from canvas"}
-        >
-          💣
-        </button>
-        
-        <div className="toolbar-divider"></div>
-        
-        {/* Zoom Settings */}
-        <button
-          onClick={resetCanvas}
-          className="toolbar-button"
-          title="Reset View"
-        >
-          🔄
-        </button>
-        <button
-          onClick={fitToView}
-          className="toolbar-button"
-          title="Fit to View"
-        >
-          ⛶
-        </button>
-        
-        <div className="toolbar-divider"></div>
-        
-        <div className="toolbar-info">
-          <span className="zoom-value">{Math.round(stageScale * 100)}%</span>
-        </div>
+      <Toolbar
+        selectedTool={selectedTool}
+        setSelectedTool={setSelectedTool}
+        selectedColor={selectedColor}
+        handleColorChange={handleColorChange}
+        shapesLength={shapes.length}
+        loading={loading}
+        error={error}
+        resetCanvas={resetCanvas}
+        fitToView={fitToView}
+        stageScale={stageScale}
+        handleClearCanvas={handleClearCanvas}
+      />
 
-        {loading && (
-          <div className="toolbar-status loading">
-            <span>⏳</span>
-          </div>
-        )}
+      <CanvasInstructions selectedTool={selectedTool} selectedShapeIdsLength={selectedShapeIds.length} />
 
-        {error && (
-          <div className="toolbar-status error" title={error}>
-            <span>⚠️</span>
-          </div>
-        )}
-      </div>
+      <ShapeCount shapesLength={shapes.length} activeCursorCount={activeCursorCount} />
 
-      {/* Canvas Instructions */}
-      <div className="canvas-instructions">
-        <p>
-          🖱️ Drag to pan • 🖲️ Scroll to zoom • 📎 Drag & drop images • 
-          {selectedTool === TOOL_TYPES.DELETE 
-            ? ' Click shapes to delete' 
-            : selectedTool === TOOL_TYPES.TEXT
-            ? ' Click to add text • Double-click text to edit'
-            : selectedShapeIds.length > 0
-            ? ` ${selectedShapeIds.length} shape${selectedShapeIds.length > 1 ? 's' : ''} selected • Ctrl+Click to multi-select • Shift+Drag to select area`
-            : ` Double-click to create ${selectedTool} • Click to select • Ctrl+Click to multi-select • Shift+Drag to select area`}
-        </p>
-      </div>
-
-      {/* Shape Count */}
-      <div className="shape-count">
-        <span>{shapes.length} shape{shapes.length !== 1 ? 's' : ''}</span>
-        {activeCursorCount > 0 && (
-          <span className="cursor-count">
-            • {activeCursorCount} user{activeCursorCount !== 1 ? 's' : ''} online
-          </span>
-        )}
-      </div>
-
-      {/* Konva Stage */}
       <Stage
         ref={stageRef}
         width={dimensions.width}
@@ -1162,13 +1043,11 @@ function Canvas() {
         onMouseDown={handleCanvasMouseDown}
         onMouseUp={handleCanvasMouseUp}
         onDragStart={(e) => {
-          // Only allow canvas drag if we're not dragging a shape or drawing selection
           if (!isDraggingShapeRef.current && !isDrawingSelection) {
             handleCanvasDragStart(e);
           }
         }}
         onDragEnd={(e) => {
-          // Only update canvas position if we're not dragging a shape
           if (!isDraggingShapeRef.current) {
             handleCanvasDragEnd(e);
           }
@@ -1178,267 +1057,43 @@ function Canvas() {
         onClick={handleCanvasClick}
         className={isDragging ? 'dragging' : ''}
       >
-        {/* Background Layer */}
-        <Layer>
-          {/* Canvas Background */}
-          <Rect
-            x={0}
-            y={0}
-            width={CANVAS_CONFIG.WIDTH}
-            height={CANVAS_CONFIG.HEIGHT}
-            fill="#ffffff"
-            shadowBlur={10}
-            shadowColor="rgba(0,0,0,0.2)"
-            shadowOffset={{ x: 0, y: 0 }}
-          />
+        <BackgroundLayer />
 
-          {/* Grid lines (optional - every 500px) */}
-          {Array.from({ length: Math.floor(CANVAS_CONFIG.WIDTH / 500) }).map((_, i) => (
-            <Rect
-              key={`grid-v-${i}`}
-              x={(i + 1) * 500}
-              y={0}
-              width={1}
-              height={CANVAS_CONFIG.HEIGHT}
-              fill="#f0f0f0"
-            />
-          ))}
-          {Array.from({ length: Math.floor(CANVAS_CONFIG.HEIGHT / 500) }).map((_, i) => (
-            <Rect
-              key={`grid-h-${i}`}
-              x={0}
-              y={(i + 1) * 500}
-              width={CANVAS_CONFIG.WIDTH}
-              height={1}
-              fill="#f0f0f0"
-            />
-          ))}
+        <ShapesLayer
+          shapes={shapes}
+          selectedShapeIds={selectedShapeIds}
+          isLockedByOther={isLockedByOther}
+          presence={presence}
+          stageScale={stageScale}
+          transformerRef={transformerRef}
+          shapeRefs={shapeRefs}
+          selectionBox={selectionBox}
+          onShapeDragStart={onShapeDragStart}
+          onShapeDragEnd={onShapeDragEnd}
+          onShapeClick={onShapeClick}
+          onShapeDoubleClick={onShapeDoubleClick}
+          handleTransformStart={handleTransformStart}
+          handleTransformEnd={handleTransformEnd}
+          isEditingText={isEditingText}
+          editingShapeId={editingShapeId}
+        />
 
-          {/* Canvas Border */}
-          <Rect
-            x={0}
-            y={0}
-            width={CANVAS_CONFIG.WIDTH}
-            height={CANVAS_CONFIG.HEIGHT}
-            stroke="#ccc"
-            strokeWidth={2}
-          />
-
-          {/* Canvas Info Text */}
-          <Text
-            x={CANVAS_CONFIG.WIDTH / 2 - 200}
-            y={CANVAS_CONFIG.HEIGHT / 2 - 50}
-            text="CollabCanvas"
-            fontSize={60}
-            fontFamily="Inter, system-ui, sans-serif"
-            fontStyle="bold"
-            fill="#e0e0e0"
-            align="center"
-            width={400}
-          />
-          
-          <Text
-            x={CANVAS_CONFIG.WIDTH / 2 - 200}
-            y={CANVAS_CONFIG.HEIGHT / 2 + 20}
-            text={`${CANVAS_CONFIG.WIDTH} × ${CANVAS_CONFIG.HEIGHT} pixels`}
-            fontSize={24}
-            fontFamily="Inter, system-ui, sans-serif"
-            fill="#ccc"
-            align="center"
-            width={400}
-          />
-
-          {/* Corner markers for visual reference */}
-          <Rect x={50} y={50} width={100} height={100} fill="#667eea" opacity={0.3} cornerRadius={10} />
-          <Rect x={CANVAS_CONFIG.WIDTH - 150} y={50} width={100} height={100} fill="#764ba2" opacity={0.3} cornerRadius={10} />
-          <Rect x={50} y={CANVAS_CONFIG.HEIGHT - 150} width={100} height={100} fill="#4ECDC4" opacity={0.3} cornerRadius={10} />
-          <Rect x={CANVAS_CONFIG.WIDTH - 150} y={CANVAS_CONFIG.HEIGHT - 150} width={100} height={100} fill="#FFA07A" opacity={0.3} cornerRadius={10} />
-        </Layer>
-
-          {/* Shapes Layer */}
-        <Layer>
-          {/* Real-time shapes from Firestore */}
-          {shapes.map((shape) => {
-            // Hide the shape if it's currently being edited
-            if (isEditingText && editingShapeId === shape.id) {
-              return null;
-            }
-            
-            // Get the color and name of the user who locked this shape
-            const lockedByUser = shape.lockedBy ? presence[shape.lockedBy] : null;
-            const lockerColor = lockedByUser?.color || null;
-            const lockerName = lockedByUser?.displayName || null;
-            
-            return (
-              <Shape
-                key={shape.id}
-                shapeData={shape}
-                isSelected={selectedShapeIds.includes(shape.id)}
-                isLocked={isLockedByOther(shape.id)}
-                lockerColor={lockerColor}
-                lockerName={lockerName}
-                stageScale={stageScale}
-                onDragStart={onShapeDragStart}
-                onDragEnd={onShapeDragEnd}
-                onClick={onShapeClick}
-                onDoubleClick={onShapeDoubleClick}
-                shapeRef={(node) => {
-                  if (node) {
-                    shapeRefs.current[shape.id] = node;
-                  } else {
-                    delete shapeRefs.current[shape.id];
-                  }
-                }}
-              />
-            );
-          })}
-          
-          {/* Transformer for selected shapes */}
-          <Transformer
-            ref={transformerRef}
-            onTransformStart={handleTransformStart}
-            onTransformEnd={handleTransformEnd}
-            rotateEnabled={true}
-            enabledAnchors={[
-              'top-left', 'top-center', 'top-right',
-              'middle-left', 'middle-right',
-              'bottom-left', 'bottom-center', 'bottom-right'
-            ]}
-          />
-
-          {/* Selection Box */}
-          {selectionBox && (
-            <Rect
-              x={Math.min(selectionBox.x1, selectionBox.x2)}
-              y={Math.min(selectionBox.y1, selectionBox.y2)}
-              width={Math.abs(selectionBox.x2 - selectionBox.x1)}
-              height={Math.abs(selectionBox.y2 - selectionBox.y1)}
-              fill="rgba(0, 102, 255, 0.1)"
-              stroke="#0066ff"
-              strokeWidth={2}
-              dash={[5, 5]}
-              listening={false}
-            />
-          )}
-        </Layer>
-
-        {/* Cursors Layer - rendered on top of shapes */}
-        <Layer listening={false}>
-          {cursorsList.map((cursor) => (
-            <Cursor key={cursor.userId} cursor={cursor} stageScale={stageScale} />
-          ))}
-        </Layer>
+        <CursorsLayer cursorsList={cursorsList} stageScale={stageScale} />
       </Stage>
       
-      {/* Text editing overlay - positioned and transformed to match text */}
-      {isEditingText && (() => {
-        // Get current stage scale directly for accurate sizing
-        const currentScale = stageRef.current ? stageRef.current.scaleX() : stageScale;
-        
-        const avgScale = (editingTextTransform.scaleX + editingTextTransform.scaleY) / 2;
-        const visualFontSize = editingTextTransform.fontSize * avgScale * currentScale;
-        
-        // Calculate dynamic dimensions based on content
-        const lines = editingTextValue.split('\n');
-        const lineCount = lines.length || 1;
-        
-        // Measure actual text width using canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        ctx.font = `${visualFontSize}px ${SHAPE_DEFAULTS.TEXT_FONT_FAMILY}`;
-        
-        // Get the width of the longest line
-        let maxWidth = 0;
-        lines.forEach(line => {
-          const metrics = ctx.measureText(line);
-          maxWidth = Math.max(maxWidth, metrics.width);
-        });
-        
-        // Add small padding for cursor
-        const padding = 4;
-        const minWidth = visualFontSize;
-        const dynamicWidth = Math.max(maxWidth + padding, minWidth);
-        const dynamicHeight = Math.max(lineCount * visualFontSize * 1.2, visualFontSize * 1.2);
-        
-        return (
-          <textarea
-            ref={textareaRef}
-            className="text-editor"
-            value={editingTextValue}
-            onChange={(e) => setEditingTextValue(e.target.value)}
-            onBlur={finishTextEditing}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                e.preventDefault();
-                cancelTextEditing();
-              } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                finishTextEditing();
-              }
-            }}
-            style={{
-              position: 'absolute',
-              left: `${editingTextPosition.x}px`,
-              top: `${editingTextPosition.y}px`,
-              fontSize: `${visualFontSize}px`,
-              fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
-              color: selectedColor,
-              background: 'transparent',
-              border: '1px solid #0066ff',
-              padding: '0',
-              margin: '0',
-              outline: 'none',
-              resize: 'none',
-              overflow: 'hidden',
-              whiteSpace: 'pre',
-              lineHeight: '1.2',
-              transformOrigin: 'top left',
-              transform: `rotate(${editingTextTransform.rotation}deg)`,
-              zIndex: 1000,
-              boxSizing: 'border-box',
-              width: `${dynamicWidth}px`,
-              height: `${dynamicHeight}px`,
-              minWidth: '20px',
-              minHeight: '20px',
-            }}
-          />
-        );
-      })()}
+      <TextEditor
+        isEditingText={isEditingText}
+        editingTextPosition={editingTextPosition}
+        editingTextValue={editingTextValue}
+        setEditingTextValue={setEditingTextValue}
+        finishTextEditing={finishTextEditing}
+        cancelTextEditing={cancelTextEditing}
+        selectedColor={selectedColor}
+        editingTextTransform={editingTextTransform}
+        stageRef={stageRef}
+      />
 
-      {/* Image Upload Loading Indicator */}
-      {isUploadingImage && (
-        <div 
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            backgroundColor: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '20px 40px',
-            borderRadius: '8px',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            fontSize: '16px',
-            fontWeight: '500',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-          }}
-        >
-          <div 
-            style={{
-              width: '24px',
-              height: '24px',
-              border: '3px solid rgba(255, 255, 255, 0.3)',
-              borderTop: '3px solid white',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite',
-            }}
-          />
-          <span>Uploading image...</span>
-        </div>
-      )}
+      <UploadIndicator isUploadingImage={isUploadingImage} />
     </div>
   );
 }

@@ -6,10 +6,8 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import useAgentActions from '../hooks/useAgentActions';
 import { processAgentCommand } from '../services/agentExecutor';
 import './AIAgentPanel.css';
-import { SHAPE_TYPES } from '../utils/constants';
 
 function AIAgentPanel({ shapes }) {
   const [command, setCommand] = useState('');
@@ -18,9 +16,6 @@ function AIAgentPanel({ shapes }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const inputRef = useRef(null);
   const historyRef = useRef(null);
-
-  // Get agent actions
-  const agentActions = useAgentActions(shapes);
 
   // Auto-scroll history to bottom
   useEffect(() => {
@@ -150,87 +145,6 @@ function AIAgentPanel({ shapes }) {
     setHistory([]);
   };
 
-  const handleTestCreateCircle = async () => {
-    try {
-      setIsProcessing(true);
-      const shapeId = await agentActions.createShape(SHAPE_TYPES.CIRCLE, 100, 200, { color: 'red', width: 100, height: 100 });
-      setHistory(prev => [...prev, { type: 'test', content: `Created red circle with ID: ${shapeId}`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error creating circle: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestCreateText = async () => {
-    try {
-      setIsProcessing(true);
-      const shapeId = await agentActions.createShape(SHAPE_TYPES.TEXT, 300, 400, { text: 'Hello World', color: 'blue', fontSize: 24 });
-      setHistory(prev => [...prev, { type: 'test', content: `Created text 'Hello World' with ID: ${shapeId}`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error creating text: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestCreateGrid = async () => {
-    try {
-      setIsProcessing(true);
-      const shapeIds = await agentActions.createGrid(SHAPE_TYPES.RECTANGLE, 2, 2, 500, 100, 150, 150, { color: 'green', width: 100, height: 100 });
-      setHistory(prev => [...prev, { type: 'test', content: `Created 2x2 grid of green squares with IDs: ${shapeIds.join(', ')}`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error creating grid: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestMoveShape = async () => {
-    try {
-      setIsProcessing(true);
-      const matchingShapes = agentActions.findShapes({ color: 'red' });
-      if (matchingShapes.length === 0) throw new Error('No red shapes found');
-      const shapeId = matchingShapes[0].id;
-      await agentActions.moveShapeBy(shapeId, 50, 50);
-      setHistory(prev => [...prev, { type: 'test', content: `Moved shape ${shapeId} by (50, 50)`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error moving shape: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestResizeShape = async () => {
-    try {
-      setIsProcessing(true);
-      const matchingShapes = agentActions.findShapes({ type: 'circle' });
-      if (matchingShapes.length === 0) throw new Error('No circles found');
-      const shapeId = matchingShapes[0].id;
-      await agentActions.resizeShape(shapeId, 200, 200);
-      setHistory(prev => [...prev, { type: 'test', content: `Resized circle ${shapeId} to 200x200`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error resizing shape: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleTestRotateShape = async () => {
-    try {
-      setIsProcessing(true);
-      const matchingShapes = agentActions.findShapes({ type: 'rectangle' });
-      if (matchingShapes.length === 0) throw new Error('No rectangles found');
-      const shapeId = matchingShapes[0].id;
-      await agentActions.rotateShape(shapeId, 45);
-      setHistory(prev => [...prev, { type: 'test', content: `Rotated rectangle ${shapeId} to 45 degrees`, success: true, timestamp: new Date() }]);
-    } catch (error) {
-      setHistory(prev => [...prev, { type: 'test', content: `Error rotating shape: ${error.message}`, success: false, timestamp: new Date() }]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   return (
     <div className={`ai-agent-panel ${isExpanded ? 'expanded' : 'collapsed'}`}>
       {/* Toggle button */}
@@ -313,37 +227,21 @@ function AIAgentPanel({ shapes }) {
 
           {/* Example commands */}
           {history.length === 0 && (
-            <>
-              {/* Example commands */}
-              <div className="ai-agent-examples">
-                <p className="ai-examples-title">Quick examples:</p>
-                <div className="ai-examples-list">
-                  {exampleCommands.map((example, index) => (
-                    <button
-                      key={index}
-                      className="ai-example-button"
-                      onClick={() => handleExampleClick(example)}
-                      disabled={isProcessing}
-                    >
-                      {example}
-                    </button>
-                  ))}
-                </div>
+            <div className="ai-agent-examples">
+              <p className="ai-examples-title">Quick examples:</p>
+              <div className="ai-examples-list">
+                {exampleCommands.map((example, index) => (
+                  <button
+                    key={index}
+                    className="ai-example-button"
+                    onClick={() => handleExampleClick(example)}
+                    disabled={isProcessing}
+                  >
+                    {example}
+                  </button>
+                ))}
               </div>
-
-              {/* New test buttons section */}
-              <div className="ai-agent-test-buttons">
-                <p className="ai-test-title">Test Agent Actions:</p>
-                <div className="ai-test-list">
-                  <button className="ai-test-button" onClick={handleTestCreateCircle} disabled={isProcessing}>Create Red Circle</button>
-                  <button className="ai-test-button" onClick={handleTestCreateText} disabled={isProcessing}>Create "Hello World" Text</button>
-                  <button className="ai-test-button" onClick={handleTestCreateGrid} disabled={isProcessing}>Create 2x2 Green Grid</button>
-                  <button className="ai-test-button" onClick={handleTestMoveShape} disabled={isProcessing}>Move a Red Shape</button>
-                  <button className="ai-test-button" onClick={handleTestResizeShape} disabled={isProcessing}>Resize a Circle</button>
-                  <button className="ai-test-button" onClick={handleTestRotateShape} disabled={isProcessing}>Rotate a Rectangle</button>
-                </div>
-              </div>
-            </>
+            </div>
           )}
 
           {/* Command input */}

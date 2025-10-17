@@ -1003,7 +1003,7 @@ function Canvas() {
         y={stagePosition.y}
         scaleX={stageScale}
         scaleY={stageScale}
-        draggable={!isDrawingSelection}
+        draggable={!isShiftPressed && !isDrawingSelection}
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
         onMouseDown={handleCanvasMouseDown}

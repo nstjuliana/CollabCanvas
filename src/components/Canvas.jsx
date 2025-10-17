@@ -9,6 +9,7 @@ import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
 import { CANVAS_CONFIG, SHAPE_TYPES, SHAPE_COLORS, SHAPE_DEFAULTS, TOOL_TYPES, DEFAULT_TOOL, DEFAULT_SHAPE_COLOR } from '../utils/constants';
 import { screenToCanvas, getRandomColor } from '../utils/helpers';
+import { buildShapeObject } from '../utils/shapeBuilders';
 import { uploadImage, loadImage, calculateScaledDimensions } from '../services/images';
 import './Canvas.css';
 
@@ -19,6 +20,7 @@ import UploadIndicator from './UploadIndicator';
 import BackgroundLayer from './BackgroundLayer';
 import ShapesLayer from './ShapesLayer';
 import CursorsLayer from './CursorsLayer';
+import AIAgentPanel from './AIAgentPanel';
 
 function Canvas() {
   const {
@@ -249,57 +251,30 @@ function Canvas() {
 
   /**
    * Create a shape at the given position
+   * Uses shared buildShapeObject to ensure consistency between UI and agent
    */
   const createShapeAtPosition = async (canvasPos, text = SHAPE_DEFAULTS.TEXT_DEFAULT) => {
     try {
-      let newShape;
+      let x, y;
+      let properties = { color: selectedColor };
       
       if (selectedTool === TOOL_TYPES.CIRCLE) {
         // For circles, x/y is the center point, so use canvasPos directly
-        newShape = {
-          type: SHAPE_TYPES.CIRCLE,
-          x: canvasPos.x,
-          y: canvasPos.y,
-          width: SHAPE_DEFAULTS.WIDTH, // Width is used as diameter
-          height: SHAPE_DEFAULTS.HEIGHT,
-          fill: selectedColor,
-          stroke: '#333333',
-          strokeWidth: SHAPE_DEFAULTS.STROKE_WIDTH,
-          opacity: SHAPE_DEFAULTS.OPACITY,
-          rotation: 0,
-        };
+        x = canvasPos.x;
+        y = canvasPos.y;
       } else if (selectedTool === TOOL_TYPES.TEXT) {
         // For text, x/y is the top-left corner
-        newShape = {
-          type: SHAPE_TYPES.TEXT,
-          x: canvasPos.x,
-          y: canvasPos.y,
-          text: text,
-          fontSize: SHAPE_DEFAULTS.TEXT_FONT_SIZE,
-          fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
-          fill: selectedColor,
-          opacity: SHAPE_DEFAULTS.OPACITY,
-          rotation: 0,
-          scaleX: 1,
-          scaleY: 1,
-        };
+        x = canvasPos.x;
+        y = canvasPos.y;
+        properties.text = text;
       } else {
         // For rectangles, x/y is top-left corner, so offset by half width/height to center on cursor
-        newShape = {
-          type: selectedTool,
-          x: canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2,
-          y: canvasPos.y - SHAPE_DEFAULTS.HEIGHT / 2,
-          width: SHAPE_DEFAULTS.WIDTH,
-          height: SHAPE_DEFAULTS.HEIGHT,
-          fill: selectedColor,
-          stroke: '#333333',
-          strokeWidth: SHAPE_DEFAULTS.STROKE_WIDTH,
-          cornerRadius: 5,
-          opacity: SHAPE_DEFAULTS.OPACITY,
-          rotation: 0,
-        };
+        x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
+        y = canvasPos.y - SHAPE_DEFAULTS.HEIGHT / 2;
       }
 
+      // Use shared shape builder - ONE source of truth!
+      const newShape = buildShapeObject(selectedTool, x, y, properties);
       const shapeId = await createShape(newShape);
       return shapeId;
     } catch (err) {
@@ -1017,6 +992,8 @@ function Canvas() {
       />
 
       <ShapeCount shapesLength={shapes.length} activeCursorCount={activeCursorCount} />
+
+      <AIAgentPanel shapes={shapes} />
 
       <Stage
         ref={stageRef}

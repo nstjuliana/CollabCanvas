@@ -35,7 +35,6 @@ function usePresence() {
           await initializePresence();
         }
       } catch (err) {
-        console.error('Error initializing presence:', err);
         setError(err.message);
       }
     };
@@ -57,11 +56,9 @@ function usePresence() {
     const unsubscribe = onConnectionStateChange(async (connected) => {
       // If we reconnected after being disconnected, re-initialize presence
       if (connected && wasDisconnected) {
-        console.log('Connection restored, re-initializing presence...');
         try {
           await initializePresence();
         } catch (err) {
-          console.error('Error re-initializing presence:', err);
         }
       }
 
@@ -80,7 +77,6 @@ function usePresence() {
   // Subscribe to real-time presence updates
   // Re-subscribe when connection state changes to ensure reliability
   useEffect(() => {
-    console.log('Setting up presence subscription...');
     
     const setupSubscription = () => {
       // Clean up any existing subscription
@@ -113,7 +109,6 @@ function usePresence() {
     let wasDisconnected = false;
     const unsubscribeConnection = onConnectionStateChange((connected) => {
       if (connected && wasDisconnected) {
-        console.log('Connection restored, re-subscribing to presence...');
         setupSubscription();
       }
       wasDisconnected = !connected;
@@ -122,7 +117,6 @@ function usePresence() {
     // Cleanup subscription on unmount
     return () => {
       if (unsubscribeRef.current) {
-        console.log('Cleaning up presence subscription');
         unsubscribeRef.current();
       }
       unsubscribeConnection();

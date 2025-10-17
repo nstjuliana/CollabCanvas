@@ -1,6 +1,79 @@
 import { useRef, useEffect, useState } from 'react';
-import { Rect, Ellipse, Group, Text, Rect as KonvaRect } from 'react-konva';
+import { Rect, Ellipse, Group, Text, Rect as KonvaRect, Image as KonvaImage } from 'react-konva';
 import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
+import useImage from 'use-image';
+
+/**
+ * ImageShape Component  
+ * Renders an image from a URL
+ */
+function ImageShape({ 
+  imageUrl, 
+  width, 
+  height, 
+  isSelected, 
+  isLocked, 
+  isHovering,
+  lockerColor,
+  finalStrokeWidth 
+}) {
+  // Don't use 'anonymous' crossOrigin for Firebase Storage URLs
+  // The download URL includes authentication token
+  const [image, status] = useImage(imageUrl);
+  
+  // Show loading state
+  if (status === 'loading') {
+    return (
+      <Rect
+        x={0}
+        y={0}
+        width={width}
+        height={height}
+        fill="#f0f0f0"
+        stroke="#ccc"
+        strokeWidth={1}
+        dash={[5, 5]}
+      />
+    );
+  }
+
+  // Show error state
+  if (status === 'failed') {
+    return (
+      <Group>
+        <Rect
+          x={0}
+          y={0}
+          width={width}
+          height={height}
+          fill="#ffebee"
+          stroke="#f44336"
+          strokeWidth={2}
+        />
+        <Text
+          x={0}
+          y={height / 2 - 10}
+          width={width}
+          text="Failed to load image"
+          fontSize={14}
+          fill="#f44336"
+          align="center"
+        />
+      </Group>
+    );
+  }
+
+  return (
+    <KonvaImage
+      x={0}
+      y={0}
+      image={image}
+      width={width}
+      height={height}
+      opacity={isLocked ? 0.5 : 1}
+    />
+  );
+}
 
 /**
  * TextShape Component  
@@ -96,6 +169,7 @@ function Shape({
   shapeData,
   isSelected = false,
   isLocked = false,
+  isInSelectionPreview = false,
   lockerColor = null,
   lockerName = null,
   stageScale = 1,
@@ -151,6 +225,9 @@ function Shape({
   // Calculate stroke width - only apply inverse scaling to locked shapes
   const inverseScale = 1 / stageScale;
   
+  // Combine hover state with selection preview
+  const showHoverEffect = isHovering || isInSelectionPreview;
+  
   // Determine stroke width based on state
   let finalStrokeWidth;
   if (isLocked) {
@@ -159,8 +236,11 @@ function Shape({
   } else if (isSelected) {
     // Selected shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth + 2;
-  } else if (isHovering) {
-    // Hovering shapes: slightly thicker stroke to indicate interactivity
+  } else if (showHoverEffect && type === SHAPE_TYPES.IMAGE) {
+    // Hovering/preview images: use fixed stroke width regardless of zoom or image scale
+    finalStrokeWidth = 4;
+  } else if (showHoverEffect) {
+    // Hovering/preview shapes: slightly thicker stroke to indicate interactivity
     finalStrokeWidth = strokeWidth + 19.5;
   } else {
     // Regular shapes: normal scaling (zoom-dependent)
@@ -173,10 +253,12 @@ function Shape({
     x,
     y,
     fill,
-    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : (isHovering ? '#000000' : stroke))),
+    stroke: isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : (showHoverEffect ? '#000000' : stroke))),
     strokeWidth: finalStrokeWidth,
-    opacity: isLocked ? opacity * 0.5 : (isHovering ? 1.0 : opacity),
+    opacity: isLocked ? opacity * 0.5 : (showHoverEffect ? 1.0 : opacity),
     rotation,
+    scaleX,
+    scaleY,
     draggable: !isLocked,
     ref: (node) => {
       nodeRef.current = node;
@@ -283,13 +365,43 @@ function Shape({
             opacity={opacity}
             isSelected={isSelected}
             isLocked={isLocked}
-            isHovering={isHovering}
+            isHovering={showHoverEffect}
             lockerColor={lockerColor}
             finalStrokeWidth={textStrokeWidth}
             textScaleX={scaleX}
             textScaleY={scaleY}
             shapeRef={null}
           />
+        </Group>
+      );
+      break;
+
+    case SHAPE_TYPES.IMAGE:
+      shapeElement = (
+        <Group {...commonProps} ref={shapeRef}>
+          <ImageShape
+            imageUrl={shapeData.imageUrl}
+            width={width}
+            height={height}
+            isSelected={isSelected}
+            isLocked={isLocked}
+            isHovering={showHoverEffect}
+            lockerColor={lockerColor}
+            finalStrokeWidth={finalStrokeWidth}
+          />
+          {/* Border for selected/locked images */}
+          {(isSelected || isLocked || showHoverEffect) && (
+            <Rect
+              x={0}
+              y={0}
+              width={width}
+              height={height}
+              fill="transparent"
+              stroke={isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : (isLocked ? '#999999' : '#000000'))}
+              strokeWidth={finalStrokeWidth}
+              listening={false}
+            />
+          )}
         </Group>
       );
       break;

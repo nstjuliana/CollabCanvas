@@ -255,3 +255,13 @@
   animation: fadeIn 0.4s ease-out;
 }
 
+/* Spinner animation for image upload */
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+

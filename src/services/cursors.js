@@ -41,7 +41,6 @@ export async function updateCursorPosition(x, y) {
       lastUpdate: serverTimestamp(),
     });
   } catch (error) {
-    console.error('Error updating cursor position:', error);
     // Don't throw error for cursor updates (graceful degradation)
   }
 }
@@ -76,18 +75,15 @@ export function subscribeToCursors(callback) {
           });
         }
 
-        // console.log('Cursors updated:', Object.keys(cursors).length);
         callback(cursors);
       },
       (error) => {
-        console.error('Error subscribing to cursors:', error);
         callback({});
       }
     );
 
     return unsubscribe;
   } catch (error) {
-    console.error('Error setting up cursor subscription:', error);
     return () => {}; // Return no-op unsubscribe function
   }
 }
@@ -104,9 +100,7 @@ export async function removeCursor() {
     const cursorRef = ref(rtdb, `${RTDB_PATHS.CURSORS}/${userId}`);
     await remove(cursorRef);
 
-    console.log('Cursor removed for user:', userId);
   } catch (error) {
-    console.error('Error removing cursor:', error);
     // Don't throw error for cursor removal (graceful degradation)
   }
 }
@@ -129,9 +123,7 @@ export async function setupCursorCleanup() {
     // Set up automatic removal on disconnect
     await onDisconnect(cursorRef).remove();
 
-    console.log('Cursor cleanup configured for user:', userId);
   } catch (error) {
-    console.error('Error setting up cursor cleanup:', error);
     // Don't throw error for cleanup setup (graceful degradation)
   }
 }
@@ -151,9 +143,7 @@ export async function initializeCursor() {
     // Set up cleanup on disconnect
     await setupCursorCleanup();
 
-    console.log('Cursor initialized for user:', userId);
   } catch (error) {
-    console.error('Error initializing cursor:', error);
     // Don't throw error for cursor initialization (graceful degradation)
   }
 }
@@ -165,9 +155,7 @@ export async function initializeCursor() {
 export async function cleanupCursor() {
   try {
     await removeCursor();
-    console.log('Cursor cleaned up');
   } catch (error) {
-    console.error('Error cleaning up cursor:', error);
   }
 }
 

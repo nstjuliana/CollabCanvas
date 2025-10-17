@@ -60,6 +60,11 @@ export async function createShape(shapeData) {
       shape.text = shapeData.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
       shape.fontSize = shapeData.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
       shape.fontFamily = shapeData.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+    } else if (shapeData.type === SHAPE_TYPES.IMAGE) {
+      // Image-specific properties
+      shape.imageUrl = shapeData.imageUrl;
+      shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+      shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
     } else {
       // Shape-specific properties (rectangle, circle)
       shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
@@ -76,10 +81,8 @@ export async function createShape(shapeData) {
     const shapesRef = collection(db, COLLECTIONS.SHAPES);
     const docRef = await addDoc(shapesRef, shape);
 
-    console.log('Shape created:', docRef.id);
     return docRef.id;
   } catch (error) {
-    console.error('Error creating shape:', error);
     throw new Error(`Failed to create shape: ${error.message}`);
   }
 }
@@ -120,9 +123,7 @@ export async function updateShape(shapeId, updates) {
     // Update in Firestore
     await updateDoc(shapeRef, updateData);
 
-    console.log('Shape updated:', shapeId);
   } catch (error) {
-    console.error('Error updating shape:', error);
     throw new Error(`Failed to update shape: ${error.message}`);
   }
 }
@@ -156,9 +157,7 @@ export async function deleteShape(shapeId) {
     // Delete from Firestore
     await deleteDoc(shapeRef);
 
-    console.log('Shape deleted:', shapeId);
   } catch (error) {
-    console.error('Error deleting shape:', error);
     throw new Error(`Failed to delete shape: ${error.message}`);
   }
 }
@@ -188,7 +187,6 @@ export async function lockShape(shapeId) {
 
     // Check if already locked by another user
     if (shapeData.lockedBy && shapeData.lockedBy !== userId) {
-      console.log('Shape already locked by another user:', shapeData.lockedBy);
       return false;
     }
 
@@ -198,10 +196,8 @@ export async function lockShape(shapeId) {
       lockedAt: serverTimestamp(),
     });
 
-    console.log('Shape locked:', shapeId);
     return true;
   } catch (error) {
-    console.error('Error locking shape:', error);
     throw new Error(`Failed to lock shape: ${error.message}`);
   }
 }
@@ -223,7 +219,6 @@ export async function unlockShape(shapeId) {
     const shapeDoc = await getDoc(shapeRef);
     
     if (!shapeDoc.exists()) {
-      console.warn('Shape not found, may have been deleted:', shapeId);
       return;
     }
 
@@ -236,12 +231,9 @@ export async function unlockShape(shapeId) {
         lockedAt: null,
       });
 
-      console.log('Shape unlocked:', shapeId);
     } else {
-      console.warn('Cannot unlock shape locked by another user');
     }
   } catch (error) {
-    console.error('Error unlocking shape:', error);
     // Don't throw error for unlock failures (graceful degradation)
   }
 }
@@ -274,18 +266,15 @@ export function subscribeToShapes(callback) {
           });
         });
 
-        console.log('Shapes updated:', shapes.length);
         callback(shapes);
       },
       (error) => {
-        console.error('Error subscribing to shapes:', error);
         callback([]);
       }
     );
 
     return unsubscribe;
   } catch (error) {
-    console.error('Error setting up shapes subscription:', error);
     return () => {}; // Return no-op unsubscribe function
   }
 }
@@ -313,7 +302,6 @@ export async function getShape(shapeId) {
       lockedAt: data.lockedAt instanceof Timestamp ? data.lockedAt.toDate() : data.lockedAt,
     };
   } catch (error) {
-    console.error('Error getting shape:', error);
     throw new Error(`Failed to get shape: ${error.message}`);
   }
 }
@@ -369,10 +357,8 @@ export async function clearAllLocks() {
     });
 
     await batch.commit();
-    console.log(`Cleared locks from ${count} shapes`);
     return count;
   } catch (error) {
-    console.error('Error clearing all locks:', error);
     throw new Error(`Failed to clear locks: ${error.message}`);
   }
 }
@@ -407,12 +393,10 @@ export async function unlockShapesForUser(targetUserId) {
 
     if (count > 0) {
       await batch.commit();
-      console.log(`Unlocked ${count} shapes for user: ${targetUserId}`);
     }
     
     return count;
   } catch (error) {
-    console.error('Error unlocking shapes for user:', error);
     throw new Error(`Failed to unlock shapes: ${error.message}`);
   }
 }
@@ -426,10 +410,8 @@ export async function unlockAllMyShapes() {
     const userId = getUserId();
     if (!userId) return;
 
-    console.log('Unlocking all shapes for current user:', userId);
     await unlockShapesForUser(userId);
   } catch (error) {
-    console.error('Error unlocking all shapes:', error);
   }
 }
 
@@ -450,7 +432,6 @@ export async function clearAllShapes() {
     const snapshot = await getDocs(shapesRef);
 
     if (snapshot.empty) {
-      console.log('No shapes to clear');
       return;
     }
 
@@ -464,9 +445,7 @@ export async function clearAllShapes() {
     });
 
     await batch.commit();
-    console.log(`Cleared ${count} shapes from canvas`);
   } catch (error) {
-    console.error('Error clearing shapes:', error);
     throw new Error(`Failed to clear shapes: ${error.message}`);
   }
 }

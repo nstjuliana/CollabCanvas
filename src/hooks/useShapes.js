@@ -28,7 +28,7 @@ function useShapes(presence = {}) {
   const [shapes, setShapes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedShapeId, setSelectedShapeId] = useState(null);
+  const [selectedShapeIds, setSelectedShapeIds] = useState([]);
   
   const unsubscribeRef = useRef(null);
   const userId = getUserId();
@@ -36,7 +36,6 @@ function useShapes(presence = {}) {
 
   // Subscribe to real-time shape updates
   useEffect(() => {
-    console.log('Setting up shapes subscription...');
     
     const unsubscribe = subscribeToShapes((updatedShapes) => {
       setShapes(updatedShapes);
@@ -49,19 +48,17 @@ function useShapes(presence = {}) {
     // Cleanup subscription on unmount
     return () => {
       if (unsubscribeRef.current) {
-        console.log('Cleaning up shapes subscription');
         unsubscribeRef.current();
       }
       
-      // Unlock any selected shape on cleanup
-      if (selectedShapeId) {
-        console.log('Unlocking selected shape on unmount');
-        unlockShapeService(selectedShapeId).catch(err => 
-          console.error('Error unlocking shape on cleanup:', err)
-        );
+      // Unlock any selected shapes on cleanup
+      if (selectedShapeIds.length > 0) {
+        selectedShapeIds.forEach(shapeId => {
+          unlockShapeService(shapeId).catch(err => {});
+        });
       }
     };
-  }, [selectedShapeId]);
+  }, [selectedShapeIds]);
 
   // Monitor presence changes and unlock shapes when users disconnect
   useEffect(() => {
@@ -76,13 +73,8 @@ function useShapes(presence = {}) {
     // Unlock shapes for each disconnected user
     disconnectedUserIds.forEach(async (disconnectedUserId) => {
       try {
-        console.log(`User disconnected: ${disconnectedUserId}, unlocking their shapes...`);
         const count = await unlockShapesForUser(disconnectedUserId);
-        if (count > 0) {
-          console.log(`Unlocked ${count} shapes for disconnected user: ${disconnectedUserId}`);
-        }
       } catch (err) {
-        console.error(`Error unlocking shapes for user ${disconnectedUserId}:`, err);
       }
     });
 
@@ -101,7 +93,6 @@ function useShapes(presence = {}) {
       const shapeId = await createShapeService(shapeData);
       return shapeId;
     } catch (err) {
-      console.error('Error creating shape:', err);
       setError(err.message);
       throw err;
     }
@@ -118,7 +109,6 @@ function useShapes(presence = {}) {
       setError(null);
       await updateShapeService(shapeId, updates);
     } catch (err) {
-      console.error('Error updating shape:', err);
       setError(err.message);
       throw err;
     }
@@ -135,15 +125,34 @@ function useShapes(presence = {}) {
       await deleteShapeService(shapeId);
       
       // Clear selection if deleted shape was selected
-      if (selectedShapeId === shapeId) {
-        setSelectedShapeId(null);
+      if (selectedShapeIds.includes(shapeId)) {
+        setSelectedShapeIds(prev => prev.filter(id => id !== shapeId));
       }
     } catch (err) {
-      console.error('Error deleting shape:', err);
       setError(err.message);
       throw err;
     }
-  }, [selectedShapeId]);
+  }, [selectedShapeIds]);
+
+  /**
+   * Delete multiple shapes
+   * @param {string[]} shapeIds - Array of shape IDs to delete
+   * @returns {Promise<void>}
+   */
+  const deleteMultipleShapes = useCallback(async (shapeIds) => {
+    try {
+      setError(null);
+      
+      // Delete each shape
+      await Promise.all(shapeIds.map(id => deleteShapeService(id)));
+      
+      // Clear selection
+      setSelectedShapeIds(prev => prev.filter(id => !shapeIds.includes(id)));
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
 
   /**
    * Clear all shapes from the canvas
@@ -153,9 +162,8 @@ function useShapes(presence = {}) {
     try {
       setError(null);
       await clearAllShapesService();
-      setSelectedShapeId(null);
+      setSelectedShapeIds([]);
     } catch (err) {
-      console.error('Error clearing shapes:', err);
       setError(err.message);
       throw err;
     }
@@ -169,10 +177,8 @@ function useShapes(presence = {}) {
     try {
       setError(null);
       const count = await clearAllLocksService();
-      console.log(`Unlocked ${count} shapes`);
       return count;
     } catch (err) {
-      console.error('Error clearing locks:', err);
       setError(err.message);
       throw err;
     }
@@ -189,7 +195,6 @@ function useShapes(presence = {}) {
       const success = await lockShapeService(shapeId);
       return success;
     } catch (err) {
-      console.error('Error locking shape:', err);
       setError(err.message);
       return false;
     }
@@ -205,51 +210,84 @@ function useShapes(presence = {}) {
       setError(null);
       await unlockShapeService(shapeId);
     } catch (err) {
-      console.error('Error unlocking shape:', err);
       // Don't set error state for unlock failures (graceful degradation)
     }
   }, []);
 
   /**
-   * Select a shape and lock it
+   * Select shapes (single or multiple)
+   * @param {string|string[]|null} shapeIds - Shape ID(s) to select, or null to deselect all
+   * @param {boolean} toggle - If true, toggle selection instead of replacing
+   */
+  const selectShapes = useCallback(async (shapeIds, toggle = false) => {
+    try {
+      // Handle null (deselect all)
+      if (shapeIds === null) {
+        setSelectedShapeIds([]);
+        // Unlock in background
+        Promise.all(selectedShapeIds.map(id => unlockShapeService(id))).catch(err => {});
+        return;
+      }
+
+      // Normalize to array
+      const idsToSelect = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
+      
+      if (toggle) {
+        // Toggle mode: add/remove from selection
+        const newSelection = [...selectedShapeIds];
+        
+        for (const id of idsToSelect) {
+          const index = newSelection.indexOf(id);
+          if (index >= 0) {
+            // Already selected, remove it
+            newSelection.splice(index, 1);
+            // Unlock in background
+            unlockShapeService(id).catch(err => {});
+          } else {
+            // Not selected, add it optimistically
+            newSelection.push(id);
+            // Lock in background
+            lockShapeService(id).then(success => {
+              if (!success) {
+                // Lock failed, remove from selection
+                setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+              }
+            }).catch(err => {});
+          }
+        }
+        
+        setSelectedShapeIds(newSelection);
+      } else {
+        // Replace mode: replace current selection
+        // Update UI immediately
+        setSelectedShapeIds(idsToSelect);
+        
+        // Unlock previously selected shapes that aren't in the new selection (in background)
+        const shapesToUnlock = selectedShapeIds.filter(id => !idsToSelect.includes(id));
+        Promise.all(shapesToUnlock.map(id => unlockShapeService(id))).catch(err => {});
+        
+        // Lock newly selected shapes (in background)
+        const shapesToLock = idsToSelect.filter(id => !selectedShapeIds.includes(id));
+        shapesToLock.forEach(id => {
+          lockShapeService(id).then(success => {
+            if (!success) {
+              // Lock failed, remove from selection
+              setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+            }
+          }).catch(err => {});
+        });
+      }
+    } catch (err) {
+    }
+  }, [selectedShapeIds]);
+
+  /**
+   * Select a single shape (for backward compatibility)
    * @param {string|null} shapeId - Shape ID to select, or null to deselect
    */
   const selectShape = useCallback(async (shapeId) => {
-    try {
-      // If deselecting (shapeId is null), unlock the previously selected shape
-      if (shapeId === null && selectedShapeId) {
-        await unlockShapeService(selectedShapeId);
-        setSelectedShapeId(null);
-        return;
-      }
-
-      // If selecting the same shape, do nothing
-      if (shapeId === selectedShapeId) {
-        return;
-      }
-
-      // Unlock previously selected shape if there is one
-      if (selectedShapeId && selectedShapeId !== shapeId) {
-        await unlockShapeService(selectedShapeId);
-      }
-
-      // Lock the newly selected shape
-      if (shapeId) {
-        const success = await lockShapeService(shapeId);
-        if (success) {
-          setSelectedShapeId(shapeId);
-        } else {
-          console.log('Could not lock shape for selection');
-          setSelectedShapeId(null);
-        }
-      } else {
-        setSelectedShapeId(null);
-      }
-    } catch (err) {
-      console.error('Error in selectShape:', err);
-      setSelectedShapeId(null);
-    }
-  }, [selectedShapeId]);
+    await selectShapes(shapeId, false);
+  }, [selectShapes]);
 
   /**
    * Check if a shape is locked by another user
@@ -290,21 +328,19 @@ function useShapes(presence = {}) {
   const handleDragStart = useCallback(async (shapeId) => {
     // Check if shape is already locked by another user
     if (isLockedByOther(shapeId)) {
-      console.log('Cannot drag - shape is locked by another user');
       return false;
     }
 
     // If shape is already locked by us (from selection), just return success
     if (isLockedByMe(shapeId)) {
-      console.log('Shape already locked by current user');
       return true;
     }
 
     // Lock the shape and select it
     const success = await lockShape(shapeId);
     if (success) {
-      // Use setSelectedShapeId directly to avoid the async selectShape logic
-      setSelectedShapeId(shapeId);
+      // Use setSelectedShapeIds directly to avoid the async selectShapes logic
+      setSelectedShapeIds([shapeId]);
     }
     return success;
   }, [isLockedByOther, isLockedByMe, lockShape]);
@@ -324,9 +360,7 @@ function useShapes(presence = {}) {
       // Don't unlock - the shape remains selected and locked
       // It will be unlocked when the user deselects it
       
-      console.log('Shape position updated after drag');
     } catch (err) {
-      console.error('Error handling drag end:', err);
       // If update failed, still keep the lock since it's selected
     }
   }, [updateShape]);
@@ -336,17 +370,20 @@ function useShapes(presence = {}) {
     shapes,
     loading,
     error,
-    selectedShapeId,
+    selectedShapeIds,
+    selectedShapeId: selectedShapeIds[0] || null, // For backward compatibility
     
     // Methods
     createShape,
     updateShape,
     deleteShape,
+    deleteMultipleShapes,
     clearAllShapes,
     clearAllLocks,
     lockShape,
     unlockShape,
     selectShape,
+    selectShapes,
     
     // Helpers
     isLockedByOther,

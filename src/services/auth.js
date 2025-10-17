@@ -42,8 +42,6 @@ export async function signup(email, password) {
       displayName: username,
     });
 
-    console.log('User signed up successfully:', user.uid);
-
     return {
       user: {
         uid: user.uid,
@@ -53,7 +51,6 @@ export async function signup(email, password) {
       credential: userCredential,
     };
   } catch (error) {
-    console.error('Signup error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -70,8 +67,6 @@ export async function login(email, password) {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
     const user = userCredential.user;
 
-    console.log('User logged in successfully:', user.uid);
-
     return {
       user: {
         uid: user.uid,
@@ -81,7 +76,6 @@ export async function login(email, password) {
       credential: userCredential,
     };
   } catch (error) {
-    console.error('Login error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -94,9 +88,7 @@ export async function login(email, password) {
 export async function logout() {
   try {
     await signOut(auth);
-    console.log('User logged out successfully');
   } catch (error) {
-    console.error('Logout error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -155,9 +147,7 @@ export function onAuthStateChanged(callback) {
 export async function sendPasswordReset(email) {
   try {
     await sendPasswordResetEmail(auth, email);
-    console.log('Password reset email sent to:', email);
   } catch (error) {
-    console.error('Password reset error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -176,9 +166,7 @@ export async function updateDisplayName(displayName) {
     }
 
     await updateProfile(user, { displayName });
-    console.log('Display name updated to:', displayName);
   } catch (error) {
-    console.error('Update display name error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -198,9 +186,7 @@ export async function reauthenticate(password) {
 
     const credential = EmailAuthProvider.credential(user.email, password);
     await reauthenticateWithCredential(user, credential);
-    console.log('User re-authenticated successfully');
   } catch (error) {
-    console.error('Re-authentication error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }
@@ -229,9 +215,7 @@ export async function changePassword(currentPassword, newPassword) {
     }
 
     await updatePassword(user, newPassword);
-    console.log('Password changed successfully');
   } catch (error) {
-    console.error('Change password error:', error);
     throw new Error(getFirebaseErrorMessage(error.code));
   }
 }

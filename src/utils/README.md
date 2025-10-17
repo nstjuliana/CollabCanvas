@@ -46,7 +46,6 @@ const userColor = getUserColor('user123');
 
 // Throttle a function
 const handleMouseMove = throttle((e) => {
-  console.log(e.clientX, e.clientY);
 }, 50);
 
 // Validate email

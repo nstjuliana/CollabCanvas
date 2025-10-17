@@ -48,16 +48,13 @@ export async function uploadImage(file, onProgress = null) {
       }
     };
 
-    console.log('Uploading image:', filename);
     const snapshot = await uploadBytes(storageRef, file, metadata);
 
     // Get download URL with token
     const downloadURL = await getDownloadURL(snapshot.ref);
-    console.log('Image uploaded successfully:', downloadURL);
 
     return downloadURL;
   } catch (error) {
-    console.error('Error uploading image:', error);
     
     // Provide more specific error messages
     if (error.code === 'storage/unauthorized') {
@@ -88,9 +85,7 @@ export async function deleteImage(imageUrl) {
     const storageRef = ref(storage, path);
     await deleteObject(storageRef);
     
-    console.log('Image deleted from storage:', path);
   } catch (error) {
-    console.error('Error deleting image:', error);
     // Don't throw error - gracefully handle deletion failures
   }
 }
@@ -115,7 +110,6 @@ export function loadImage(imageUrl) {
     };
     
     img.onerror = (error) => {
-      console.error('Image load error:', error);
       reject(new Error(`Failed to load image from: ${imageUrl}`));
     };
     

@@ -35,7 +35,6 @@ function useCursors() {
       try {
         await initializeCursor();
       } catch (err) {
-        console.error('Error initializing cursor:', err);
         setError(err.message);
       }
     };
@@ -59,11 +58,9 @@ function useCursors() {
     const unsubscribe = onConnectionStateChange(async (connected) => {
       // If we reconnected after being disconnected, re-initialize cursor
       if (connected && wasDisconnected) {
-        console.log('Connection restored, re-initializing cursor...');
         try {
           await initializeCursor();
         } catch (err) {
-          console.error('Error re-initializing cursor:', err);
         }
       }
 
@@ -82,7 +79,6 @@ function useCursors() {
   // Subscribe to real-time cursor updates
   // Re-subscribe when connection state changes to ensure reliability
   useEffect(() => {
-    console.log('Setting up cursors subscription...');
     
     const setupSubscription = () => {
       // Clean up any existing subscription
@@ -115,7 +111,6 @@ function useCursors() {
     let wasDisconnected = false;
     const unsubscribeConnection = onConnectionStateChange((connected) => {
       if (connected && wasDisconnected) {
-        console.log('Connection restored, re-subscribing to cursors...');
         setupSubscription();
       }
       wasDisconnected = !connected;
@@ -124,7 +119,6 @@ function useCursors() {
     // Cleanup subscription on unmount
     return () => {
       if (unsubscribeRef.current) {
-        console.log('Cleaning up cursors subscription');
         unsubscribeRef.current();
       }
       unsubscribeConnection();
@@ -149,7 +143,6 @@ function useCursors() {
       // Update cursor position in database
       updateCursorService(x, y);
     } catch (err) {
-      console.error('Error updating cursor position:', err);
       // Don't set error state for cursor updates (graceful degradation)
     }
   }, []);

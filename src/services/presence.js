@@ -37,9 +37,7 @@ export async function setUserOnline() {
       lastSeen: serverTimestamp(),
     });
 
-    console.log('User set to online:', userId);
   } catch (error) {
-    console.error('Error setting user online:', error);
     throw error;
   }
 }
@@ -56,9 +54,7 @@ export async function removePresence() {
     const presenceRef = ref(rtdb, `${RTDB_PATHS.PRESENCE}/${userId}`);
     await remove(presenceRef);
 
-    console.log('Presence removed for user:', userId);
   } catch (error) {
-    console.error('Error removing presence:', error);
     // Don't throw error for presence removal (graceful degradation)
   }
 }
@@ -89,18 +85,15 @@ export function subscribeToPresence(callback) {
           });
         }
 
-        console.log('Presence updated:', Object.keys(presenceData).length, 'users');
         callback(presenceData);
       },
       (error) => {
-        console.error('Error subscribing to presence:', error);
         callback({});
       }
     );
 
     return unsubscribe;
   } catch (error) {
-    console.error('Error setting up presence subscription:', error);
     return () => {}; // Return no-op unsubscribe function
   }
 }
@@ -123,9 +116,7 @@ export async function setupPresenceCleanup() {
     // Set up automatic removal on disconnect
     await onDisconnect(presenceRef).remove();
 
-    console.log('Presence cleanup configured for user:', userId);
   } catch (error) {
-    console.error('Error setting up presence cleanup:', error);
     // Don't throw error for cleanup setup (graceful degradation)
   }
 }
@@ -148,9 +139,7 @@ export async function initializePresence() {
     // Then set user as online
     await setUserOnline();
 
-    console.log('Presence initialized for user:', userId);
   } catch (error) {
-    console.error('Error initializing presence:', error);
     throw error;
   }
 }
@@ -163,9 +152,7 @@ export async function cleanupPresence() {
   try {
     // Remove presence data completely on logout
     await removePresence();
-    console.log('Presence cleaned up');
   } catch (error) {
-    console.error('Error cleaning up presence:', error);
   }
 }
 

@@ -13,7 +13,6 @@ import { uploadImage, loadImage, calculateScaledDimensions } from '../services/i
 import './Canvas.css';
 
 import Toolbar from './Toolbar';
-import CanvasInstructions from './CanvasInstructions';
 import ShapeCount from './ShapeCount';
 import TextEditor from './TextEditor';
 import UploadIndicator from './UploadIndicator';
@@ -240,7 +239,6 @@ function Canvas() {
             await deleteMultipleShapes(shapesToDelete);
           }
         } catch (err) {
-          console.error('Failed to delete shapes:', err);
         }
       }
     };
@@ -448,7 +446,6 @@ function Canvas() {
       try {
         await deleteShape(shape.id);
       } catch (err) {
-        console.error('Failed to delete shape:', err);
       }
     } else {
       // Check if shape is locked by another user
@@ -513,7 +510,6 @@ function Canvas() {
           shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
         );
       } catch (err) {
-        console.error('Failed to update shapes color:', err);
       }
     }
   };
@@ -723,7 +719,6 @@ function Canvas() {
         try {
           await updateShape(editingShapeId, { text });
         } catch (err) {
-          console.error('Failed to update text shape:', err);
         }
       } else {
         // Create new text shape at the clicked position
@@ -741,7 +736,6 @@ function Canvas() {
       try {
         await deleteShape(editingShapeId);
       } catch (err) {
-        console.error('Failed to delete text shape:', err);
       }
     }
     
@@ -750,7 +744,6 @@ function Canvas() {
       try {
         await unlockShape(editingShapeId);
       } catch (err) {
-        console.error('Failed to unlock text shape:', err);
       }
     }
     
@@ -769,7 +762,6 @@ function Canvas() {
       try {
         await unlockShape(editingShapeId);
       } catch (err) {
-        console.error('Failed to unlock text shape:', err);
       }
     }
     
@@ -813,7 +805,6 @@ function Canvas() {
       try {
         await clearAllShapes();
       } catch (err) {
-        console.error('Failed to clear canvas:', err);
       }
     }
   };
@@ -900,7 +891,6 @@ function Canvas() {
 
         await createShape(newShape);
       } catch (err) {
-        console.error('Failed to upload image:', err);
         alert(`Failed to upload ${file.name}: ${err.message}`);
       } finally {
         setIsUploadingImage(false);
@@ -994,7 +984,6 @@ function Canvas() {
       await updateShape(transformedShapeId, updates);
       
     } catch (err) {
-      console.error('Failed to update shape after transform:', err);
     } finally {
       // Mark that we're done transforming
       isDraggingShapeRef.current = false;
@@ -1026,8 +1015,6 @@ function Canvas() {
         stageScale={stageScale}
         handleClearCanvas={handleClearCanvas}
       />
-
-      <CanvasInstructions selectedTool={selectedTool} selectedShapeIdsLength={selectedShapeIds.length} />
 
       <ShapeCount shapesLength={shapes.length} activeCursorCount={activeCursorCount} />
 

@@ -48,17 +48,13 @@ import { signup, login, logout, onAuthStateChanged, getCurrentUser } from './ser
 // Sign up a new user
 try {
   const result = await signup('user@example.com', 'password123');
-  console.log('Signed up:', result.user);
 } catch (error) {
-  console.error('Signup failed:', error.message);
 }
 
 // Log in existing user
 try {
   const result = await login('user@example.com', 'password123');
-  console.log('Logged in:', result.user);
 } catch (error) {
-  console.error('Login failed:', error.message);
 }
 
 // Log out
@@ -67,15 +63,12 @@ await logout();
 // Get current user (synchronous)
 const user = getCurrentUser();
 if (user) {
-  console.log('Current user:', user.email);
 }
 
 // Listen for auth state changes
 const unsubscribe = onAuthStateChanged((user) => {
   if (user) {
-    console.log('User logged in:', user.email);
   } else {
-    console.log('User logged out');
   }
 });
 

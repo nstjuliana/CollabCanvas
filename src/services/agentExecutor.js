@@ -1,29 +1,22 @@
 /**
  * Agent Executor
- * Executes AI agent commands using LLM function calling
- * 
- * This is an example implementation that shows how to integrate
- * with an LLM API (OpenAI, Anthropic, etc.)
+ * Executes AI agent commands using Vercel AI SDK
+ * Supports streaming responses and function calling
  */
 
+import { streamText, tool } from 'ai';
+import { createOpenAI } from '@ai-sdk/openai';
+import { z } from 'zod';
 import * as agentActions from './agentActions';
 
 /**
- * Function definitions for LLM tool use
- * These describe the available functions to the LLM
+ * Legacy tool definitions array (kept for reference)
+ * Now using Zod schemas with tool() function below
  */
-export const AGENT_TOOLS = [
-  {
-    name: 'getAllShapes',
-    description: 'Get all shapes currently on the canvas',
-    parameters: {
-      type: 'object',
-      properties: {},
-    },
-  },
+export const AGENT_TOOLS_LEGACY = [
   {
     name: 'findShapes',
-    description: 'Find shapes matching specific criteria (type, color, position, or text content)',
+    description: 'Find shapes matching specific criteria (type, color, position, or text content). Call with empty criteria {} to get all shapes.',
     parameters: {
       type: 'object',
       properties: {
@@ -49,9 +42,10 @@ export const AGENT_TOOLS = [
               description: 'Text content to search for (only for text shapes)',
             },
           },
+          description: 'Search criteria. Pass empty object {} to get all shapes.',
         },
       },
-      required: ['criteria'],
+      required: [],
     },
   },
   {
@@ -310,11 +304,8 @@ export async function executeFunctionCall(functionName, args, shapes) {
   try {
     // Map function name to actual implementation
     switch (functionName) {
-      case 'getAllShapes':
-        return agentActions.getAllShapes(shapes);
-      
       case 'findShapes':
-        return agentActions.findShapes(shapes, args.criteria);
+        return agentActions.findShapes(shapes, args.criteria || {});
       
       case 'createShape':
         return await agentActions.createShape(args.type, args.x, args.y, args.properties || {});
@@ -373,18 +364,112 @@ export async function executeFunctionCall(functionName, args, shapes) {
 }
 
 /**
- * Process a user command through the AI agent
- * This is a template - you'll need to integrate with your chosen LLM API
+ * Process a user command through the AI agent using Vercel AI SDK
+ * Supports streaming responses and function calling
  * 
  * @param {string} userCommand - Natural language command from user
  * @param {Array} shapes - Current shapes array
- * @param {Function} llmApiCall - Function that calls your LLM API
+ * @param {Function} onChunk - Callback for streaming text chunks
+ * @param {Function} onToolCall - Callback for tool call execution
  * @returns {Promise<Object>} Result with success status and message
  */
-export async function processAgentCommand(userCommand, shapes, llmApiCall) {
+export async function processAgentCommand(userCommand, shapes, { onChunk, onToolCall } = {}) {
   try {
-    // Step 1: Send command + tools to LLM
-    const llmResponse = await llmApiCall({
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('OpenAI API key not configured. Please add VITE_OPENAI_API_KEY to your .env or .env.local file.');
+    }
+
+    // Create OpenAI instance with explicit API key (required for browser environment)
+    const openai = createOpenAI({
+      apiKey: apiKey,
+    });
+
+    // Define tools using Zod schemas (proper AI SDK format)
+    const tools = {
+      findShapes: tool({
+        description: 'Find shapes matching specific criteria (type, color, position, or text content). Call with empty criteria to get all shapes.',
+        inputSchema: z.object({
+          criteria: z.object({
+            type: z.enum(['rectangle', 'circle', 'text', 'image', 'square']).optional().describe('Shape type to filter by'),
+            color: z.string().optional().describe('Color to filter by (hex code or color name like "red", "blue")'),
+            position: z.enum(['leftmost', 'rightmost', 'topmost', 'bottommost', 'left', 'right', 'top', 'bottom']).optional().describe('Find shape in specific relative position'),
+            text: z.string().optional().describe('Text content to search for (only for text shapes)'),
+          }).optional().describe('Search criteria. Omit or pass empty object to get all shapes'),
+        }),
+        execute: async ({ criteria }) => {
+          const result = await agentActions.findShapes(shapes, criteria || {});
+          if (onToolCall) onToolCall({ function: 'findShapes', args: { criteria }, result });
+          return result;
+        },
+      }),
+      
+      createShape: tool({
+        description: 'Create a single shape on the canvas',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to create'),
+          x: z.number().describe('X position on canvas (0 is left)'),
+          y: z.number().describe('Y position on canvas (0 is top)'),
+          properties: z.object({
+            color: z.string().optional(),
+            width: z.number().optional(),
+            height: z.number().optional(),
+            text: z.string().optional(),
+            fontSize: z.number().optional(),
+            rotation: z.number().optional(),
+          }).optional(),
+        }),
+        execute: async ({ type, x, y, properties }) => {
+          const result = await agentActions.createShape(type, x, y, properties || {});
+          if (onToolCall) onToolCall({ function: 'createShape', args: { type, x, y, properties }, result });
+          return result;
+        },
+      }),
+      
+      moveShapeBy: tool({
+        description: 'Move a shape by a relative offset. Positive X moves right, negative left. Positive Y moves down, negative up.',
+        inputSchema: z.object({
+          shapeId: z.string().describe('Shape ID'),
+          deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
+          deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
+        }),
+        execute: async ({ shapeId, deltaX, deltaY }) => {
+          const result = await agentActions.moveShapeBy(shapeId, deltaX, deltaY);
+          if (onToolCall) onToolCall({ function: 'moveShapeBy', args: { shapeId, deltaX, deltaY }, result });
+          return result;
+        },
+      }),
+      
+      changeShapeColor: tool({
+        description: 'Change the color of a single shape',
+        inputSchema: z.object({
+          shapeId: z.string().describe('Shape ID'),
+          color: z.string().describe('New color (hex or color name)'),
+        }),
+        execute: async ({ shapeId, color }) => {
+          const result = await agentActions.changeShapeColor(shapeId, color);
+          if (onToolCall) onToolCall({ function: 'changeShapeColor', args: { shapeId, color }, result });
+          return result;
+        },
+      }),
+      
+      deleteShape: tool({
+        description: 'Delete a single shape by its ID',
+        inputSchema: z.object({
+          shapeId: z.string().describe('ID of the shape to delete'),
+        }),
+        execute: async ({ shapeId }) => {
+          const result = await agentActions.deleteShape(shapeId);
+          if (onToolCall) onToolCall({ function: 'deleteShape', args: { shapeId }, result });
+          return result;
+        },
+      }),
+    };
+
+    // Stream the response with function calling
+    const result = await streamText({
+      model: openai('gpt-4-turbo'),
       messages: [
         {
           role: 'system',
@@ -392,7 +477,9 @@ export async function processAgentCommand(userCommand, shapes, llmApiCall) {
 The canvas is 5000x5000 pixels with origin at top-left (0,0).
 When asked to move shapes "left", use negative X. "Right" uses positive X. 
 "Up" uses negative Y. "Down" uses positive Y.
+To find shapes, use findShapes with appropriate criteria. To get all shapes, call findShapes with empty criteria {}.
 Always query for shapes using findShapes before operating on them.
+When you execute tool calls, provide a brief confirmation of what you did.
 Be helpful and execute the user's intent accurately.`,
         },
         {
@@ -400,30 +487,31 @@ Be helpful and execute the user's intent accurately.`,
           content: userCommand,
         },
       ],
-      tools: AGENT_TOOLS,
+      tools,
+      maxSteps: 5, // Allow multiple tool calls in sequence
     });
 
-    // Step 2: Execute function calls returned by LLM
-    const results = [];
-    for (const toolCall of llmResponse.tool_calls || []) {
-      const result = await executeFunctionCall(
-        toolCall.function.name,
-        JSON.parse(toolCall.function.arguments),
-        shapes
-      );
-      results.push({
-        function: toolCall.function.name,
-        result,
-      });
+    // Collect all text chunks
+    let fullText = '';
+    const toolCalls = [];
+    
+    for await (const chunk of result.textStream) {
+      fullText += chunk;
+      if (onChunk) {
+        onChunk(chunk);
+      }
     }
 
-    // Step 3: Return results
+    // Wait for all tool calls to complete
+    await result.toolCalls;
+
     return {
       success: true,
-      message: `Executed ${results.length} action(s)`,
-      results,
+      message: fullText || 'Command executed successfully',
+      text: fullText,
     };
   } catch (error) {
+    console.error('Agent command error:', error);
     return {
       success: false,
       message: error.message,
@@ -433,85 +521,27 @@ Be helpful and execute the user's intent accurately.`,
 }
 
 /**
- * Example: OpenAI API integration
+ * Alternative: Use Anthropic Claude with Vercel AI SDK
  * 
- * To use with OpenAI:
- * 1. Install: npm install openai
- * 2. Set environment variable: VITE_OPENAI_API_KEY
- * 3. Use this function
+ * To use Anthropic instead of OpenAI:
+ * 1. Install: npm install @ai-sdk/anthropic
+ * 2. Set environment variable: VITE_ANTHROPIC_API_KEY
+ * 3. Import: import { anthropic } from '@ai-sdk/anthropic';
+ * 4. Replace openai('gpt-4-turbo') with anthropic('claude-3-5-sonnet-20241022')
  */
-export async function callOpenAI({ messages, tools }) {
-  // Example implementation (requires OpenAI SDK)
-  /*
-  const OpenAI = require('openai');
-  const openai = new OpenAI({
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true, // Only for demo - use backend in production
-  });
-
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4-turbo-preview',
-    messages,
-    tools: tools.map(tool => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      },
-    })),
-    tool_choice: 'auto',
-  });
-
-  return {
-    tool_calls: response.choices[0].message.tool_calls || [],
-  };
-  */
-  
-  throw new Error('LLM API not configured. Please implement callOpenAI or use another LLM provider.');
-}
 
 /**
- * Example: Anthropic Claude API integration
+ * Alternative: Use any other provider supported by Vercel AI SDK
  * 
- * To use with Anthropic:
- * 1. Install: npm install @anthropic-ai/sdk
- * 2. Set environment variable: VITE_ANTHROPIC_API_KEY
- * 3. Use this function
+ * Supported providers:
+ * - OpenAI: @ai-sdk/openai
+ * - Anthropic: @ai-sdk/anthropic
+ * - Google: @ai-sdk/google
+ * - Mistral: @ai-sdk/mistral
+ * - Cohere: @ai-sdk/cohere
+ * - And many more!
+ * 
+ * See: https://sdk.vercel.ai/providers/ai-sdk-providers
  */
-export async function callAnthropic({ messages, tools }) {
-  // Example implementation (requires Anthropic SDK)
-  /*
-  const Anthropic = require('@anthropic-ai/sdk');
-  const anthropic = new Anthropic({
-    apiKey: import.meta.env.VITE_ANTHROPIC_API_KEY,
-  });
-
-  const response = await anthropic.messages.create({
-    model: 'claude-3-opus-20240229',
-    max_tokens: 4096,
-    tools: tools.map(tool => ({
-      name: tool.name,
-      description: tool.description,
-      input_schema: tool.parameters,
-    })),
-    messages,
-  });
-
-  // Parse tool use from response
-  const toolCalls = response.content
-    .filter(block => block.type === 'tool_use')
-    .map(block => ({
-      function: {
-        name: block.name,
-        arguments: JSON.stringify(block.input),
-      },
-    }));
-
-  return { tool_calls: toolCalls };
-  */
-  
-  throw new Error('LLM API not configured. Please implement callAnthropic or use another LLM provider.');
-}
 
 

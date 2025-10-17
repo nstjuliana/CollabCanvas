@@ -1,8 +1,8 @@
 # AI Agent Setup Guide
 
-## ✅ What's Been Created
+## ✅ What's Been Integrated
 
-I've set up a clean, modular AI agent system for CollabCanvas with simple atomic functions that an LLM can use. Here's what's included:
+The AI Agent is now fully integrated with **Vercel AI SDK**! Here's what's included:
 
 ### 1. **Core Agent Actions** (`src/services/agentActions.js`)
 Basic functions for manipulating shapes:
@@ -17,12 +17,19 @@ Basic functions for manipulating shapes:
 Easy-to-use hook that wraps the agent actions with shapes state.
 
 ### 3. **Agent Executor** (`src/services/agentExecutor.js`)
+- **✨ NEW**: Fully integrated with Vercel AI SDK
 - Tool definitions for LLM function calling (OpenAI/Anthropic compatible)
-- Function execution router
-- Template for LLM API integration
+- Function execution router with streaming support
+- Real-time response streaming
+- Multi-step execution (chains multiple operations)
 
 ### 4. **UI Component** (`src/components/AIAgentPanel.jsx`)
-Beautiful, collapsible chat interface for AI agent interaction.
+**✨ NEW**: Enhanced with streaming support
+- Beautiful, collapsible chat interface
+- Real-time streaming responses with cursor animation
+- Tool call visualization
+- Test buttons for trying actions without AI
+- Chat history persistence
 
 ### 5. **Documentation** (`src/services/AI_AGENT_GUIDE.md`)
 Complete guide with examples for every function.
@@ -31,60 +38,33 @@ Complete guide with examples for every function.
 
 ## 🚀 How to Use It
 
-### Quick Integration (3 steps):
+### Quick Start (2 steps):
 
-#### Step 1: Add the AI Agent Panel to your Canvas
+#### Step 1: Add Your OpenAI API Key
 
-Edit `src/components/Canvas.jsx`:
+Create a `.env` file in the project root:
 
-```jsx
-import AIAgentPanel from './AIAgentPanel';
-
-function Canvas() {
-  // ... existing code ...
-  
-  return (
-    <div className="canvas-wrapper">
-      {/* ... existing components ... */}
-      
-      {/* Add AI Agent Panel */}
-      <AIAgentPanel shapes={shapes} />
-    </div>
-  );
-}
+```env
+VITE_OPENAI_API_KEY=sk-proj-your-key-here
 ```
 
-#### Step 2: Choose Your LLM Provider
+Get your API key from: https://platform.openai.com/api-keys
 
-Pick one of these options:
+#### Step 2: Restart Dev Server
 
-**Option A: OpenAI (Recommended)**
 ```bash
-npm install openai
+npm run dev
 ```
 
-Add to `.env`:
-```
-VITE_OPENAI_API_KEY=your-api-key-here
-```
+That's it! The AI Agent is ready to use. 🎉
 
-**Option B: Anthropic Claude**
-```bash
-npm install @anthropic-ai/sdk
-```
+### Alternative Providers
 
-Add to `.env`:
-```
-VITE_ANTHROPIC_API_KEY=your-api-key-here
-```
-
-**Option C: Any other LLM with function calling**
-- Implement your own LLM call function
-- Follow the pattern in `agentExecutor.js`
-
-#### Step 3: Implement the LLM Integration
-
-Edit `src/services/agentExecutor.js` and uncomment/modify one of these functions:
+Want to use a different AI provider? See [VERCEL_AI_SDK_INTEGRATION.md](./VERCEL_AI_SDK_INTEGRATION.md) for:
+- Anthropic Claude
+- Google Gemini
+- Mistral
+- And more!
 
 **For OpenAI:**
 ```javascript

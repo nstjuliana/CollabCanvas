@@ -7,7 +7,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import useAgentActions from '../hooks/useAgentActions';
-import { processAgentCommand, callOpenAI } from '../services/agentExecutor';
+import { processAgentCommand } from '../services/agentExecutor';
 import './AIAgentPanel.css';
 import { SHAPE_TYPES } from '../utils/constants';
 
@@ -30,7 +30,7 @@ function AIAgentPanel({ shapes }) {
   }, [history]);
 
   /**
-   * Handle command submission
+   * Handle command submission with streaming
    */
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -48,30 +48,79 @@ function AIAgentPanel({ shapes }) {
       timestamp: new Date(),
     }]);
 
-    try {
-      // Process command through AI agent
-      // NOTE: You'll need to implement the LLM API call
-      // For now, this will throw an error with instructions
-      const result = await processAgentCommand(userCommand, shapes, callOpenAI);
+    // Add a placeholder for agent response that will be updated with streaming chunks
+    const agentMessageIndex = history.length + 1;
+    setHistory(prev => [...prev, {
+      type: 'agent',
+      content: '',
+      streaming: true,
+      success: null,
+      timestamp: new Date(),
+      toolCalls: [],
+    }]);
 
-      // Add result to history
-      setHistory(prev => [...prev, {
-        type: 'agent',
-        content: result.success 
-          ? `✓ ${result.message}`
-          : `✗ Error: ${result.message}`,
-        success: result.success,
-        timestamp: new Date(),
-        details: result.results,
-      }]);
+    try {
+      // Process command through AI agent with streaming
+      const result = await processAgentCommand(userCommand, shapes, {
+        // Stream text chunks as they arrive
+        onChunk: (chunk) => {
+          setHistory(prev => {
+            const newHistory = [...prev];
+            if (newHistory[agentMessageIndex]) {
+              newHistory[agentMessageIndex] = {
+                ...newHistory[agentMessageIndex],
+                content: newHistory[agentMessageIndex].content + chunk,
+              };
+            }
+            return newHistory;
+          });
+        },
+        // Handle tool calls
+        onToolCall: (toolCall) => {
+          setHistory(prev => {
+            const newHistory = [...prev];
+            if (newHistory[agentMessageIndex]) {
+              const toolCalls = [...(newHistory[agentMessageIndex].toolCalls || [])];
+              toolCalls.push(toolCall);
+              newHistory[agentMessageIndex] = {
+                ...newHistory[agentMessageIndex],
+                toolCalls,
+              };
+            }
+            return newHistory;
+          });
+        },
+      });
+
+      // Update the final message with success status
+      setHistory(prev => {
+        const newHistory = [...prev];
+        if (newHistory[agentMessageIndex]) {
+          newHistory[agentMessageIndex] = {
+            ...newHistory[agentMessageIndex],
+            streaming: false,
+            success: result.success,
+            content: result.success 
+              ? (newHistory[agentMessageIndex].content || result.message)
+              : `✗ Error: ${result.message}`,
+          };
+        }
+        return newHistory;
+      });
     } catch (error) {
-      // Add error to history
-      setHistory(prev => [...prev, {
-        type: 'agent',
-        content: `✗ Error: ${error.message}`,
-        success: false,
-        timestamp: new Date(),
-      }]);
+      // Update message with error
+      setHistory(prev => {
+        const newHistory = [...prev];
+        if (newHistory[agentMessageIndex]) {
+          newHistory[agentMessageIndex] = {
+            ...newHistory[agentMessageIndex],
+            streaming: false,
+            success: false,
+            content: `✗ Error: ${error.message}`,
+          };
+        }
+        return newHistory;
+      });
     } finally {
       setIsProcessing(false);
       inputRef.current?.focus();
@@ -225,19 +274,24 @@ function AIAgentPanel({ shapes }) {
               history.map((entry, index) => (
                 <div 
                   key={index} 
-                  className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''}`}
+                  className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''} ${entry.streaming ? 'ai-message-streaming' : ''}`}
                 >
-                  <div className="ai-message-content">{entry.content}</div>
-                  {entry.details && entry.details.length > 0 && (
+                  <div className="ai-message-content">
+                    {entry.content || (entry.streaming ? '...' : '')}
+                    {entry.streaming && <span className="ai-cursor">▊</span>}
+                  </div>
+                  {entry.toolCalls && entry.toolCalls.length > 0 && (
                     <div className="ai-message-details">
-                      {entry.details.map((detail, i) => (
+                      {entry.toolCalls.map((toolCall, i) => (
                         <div key={i} className="ai-detail">
-                          <code>{detail.function}</code>
-                          {detail.result && typeof detail.result === 'object' && (
+                          <code>{toolCall.function}</code>
+                          {toolCall.result && (
                             <span className="ai-detail-result">
-                              {Array.isArray(detail.result) 
-                                ? `(${detail.result.length} items)`
-                                : JSON.stringify(detail.result).substring(0, 50)
+                              {Array.isArray(toolCall.result) 
+                                ? `(${toolCall.result.length} ${toolCall.result.length === 1 ? 'item' : 'items'})`
+                                : typeof toolCall.result === 'string'
+                                ? '✓'
+                                : JSON.stringify(toolCall.result).substring(0, 50)
                               }
                             </span>
                           )}

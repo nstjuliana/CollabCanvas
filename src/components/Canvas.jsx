@@ -738,24 +738,34 @@ function Canvas() {
         {/* Shapes Layer */}
         <Layer>
           {/* Real-time shapes from Firestore */}
-          {shapes.map((shape) => (
-            <Shape
-              key={shape.id}
-              shapeData={shape}
-              isSelected={shape.id === selectedShapeId}
-              isLocked={isLockedByOther(shape.id)}
-              onDragStart={onShapeDragStart}
-              onDragEnd={onShapeDragEnd}
-              onClick={onShapeClick}
-              shapeRef={(node) => {
-                if (node) {
-                  shapeRefs.current[shape.id] = node;
-                } else {
-                  delete shapeRefs.current[shape.id];
-                }
-              }}
-            />
-          ))}
+          {shapes.map((shape) => {
+            // Get the color and name of the user who locked this shape
+            const lockedByUser = shape.lockedBy ? presence[shape.lockedBy] : null;
+            const lockerColor = lockedByUser?.color || null;
+            const lockerName = lockedByUser?.displayName || null;
+            
+            return (
+              <Shape
+                key={shape.id}
+                shapeData={shape}
+                isSelected={shape.id === selectedShapeId}
+                isLocked={isLockedByOther(shape.id)}
+                lockerColor={lockerColor}
+                lockerName={lockerName}
+                stageScale={stageScale}
+                onDragStart={onShapeDragStart}
+                onDragEnd={onShapeDragEnd}
+                onClick={onShapeClick}
+                shapeRef={(node) => {
+                  if (node) {
+                    shapeRefs.current[shape.id] = node;
+                  } else {
+                    delete shapeRefs.current[shape.id];
+                  }
+                }}
+              />
+            );
+          })}
           
           {/* Transformer for selected shape */}
           <Transformer

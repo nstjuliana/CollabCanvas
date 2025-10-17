@@ -212,7 +212,7 @@ function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete to delete, Escape to deselect)
+  // Handle keyboard events (Delete to delete, Escape to deselect, Arrow keys to nudge)
   useEffect(() => {
     const handleKeyDown = async (e) => {
       // Don't handle if user is typing in an input field
@@ -244,11 +244,58 @@ function Canvas() {
         } catch (err) {
         }
       }
+
+      // Arrow keys - nudge selected shapes by 1 pixel
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedShapeIds.length > 0) {
+        e.preventDefault(); // Prevent page scrolling
+        
+        // Filter out shapes locked by others
+        const shapesToMove = selectedShapeIds.filter(id => !isLockedByOther(id));
+        
+        if (shapesToMove.length === 0) {
+          return;
+        }
+
+        // Calculate offset based on arrow key
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        switch (e.key) {
+          case 'ArrowUp':
+            offsetY = -1;
+            break;
+          case 'ArrowDown':
+            offsetY = 1;
+            break;
+          case 'ArrowLeft':
+            offsetX = -1;
+            break;
+          case 'ArrowRight':
+            offsetX = 1;
+            break;
+        }
+
+        // Update all selected shapes
+        try {
+          await Promise.all(
+            shapesToMove.map(id => {
+              const shape = shapes.find(s => s.id === id);
+              if (shape) {
+                return updateShape(id, {
+                  x: shape.x + offsetX,
+                  y: shape.y + offsetY
+                });
+              }
+            })
+          );
+        } catch (err) {
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeIds, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape]);
+  }, [selectedShapeIds, shapes, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape, updateShape]);
 
   /**
    * Create a shape at the given position

@@ -69,8 +69,17 @@ function Canvas() {
   // Text editing state
   const [isEditingText, setIsEditingText] = useState(false);
   const [editingTextPosition, setEditingTextPosition] = useState({ x: 0, y: 0 });
+  const [editingTextCanvasPosition, setEditingTextCanvasPosition] = useState({ x: 0, y: 0 }); // Canvas coordinates
   const [editingTextValue, setEditingTextValue] = useState('');
   const [editingShapeId, setEditingShapeId] = useState(null);
+  const [editingTextTransform, setEditingTextTransform] = useState({ 
+    fontSize: SHAPE_DEFAULTS.TEXT_FONT_SIZE, 
+    rotation: 0, 
+    scaleX: 1, 
+    scaleY: 1,
+    width: 100,
+    height: 32,
+  });
   const textareaRef = useRef(null);
 
   // Handle window resize and measure container
@@ -100,9 +109,9 @@ function Canvas() {
     return () => clearTimeout(timer);
   }, [fitToView, dimensions]);
 
-  // Attach transformer to selected shape
+  // Attach transformer to selected shape (hide during text editing)
   useEffect(() => {
-    if (transformerRef.current && selectedShapeId) {
+    if (transformerRef.current && selectedShapeId && !isEditingText) {
       const selectedNode = shapeRefs.current[selectedShapeId];
       if (selectedNode) {
         transformerRef.current.nodes([selectedNode]);
@@ -112,7 +121,17 @@ function Canvas() {
       transformerRef.current.nodes([]);
       transformerRef.current.getLayer()?.batchDraw();
     }
-  }, [selectedShapeId, shapes]);
+  }, [selectedShapeId, shapes, isEditingText]);
+
+  // Update text editing position when canvas zooms or pans
+  useEffect(() => {
+    if (isEditingText) {
+      // Recalculate screen position from canvas position
+      const screenX = editingTextCanvasPosition.x * stageScale + stagePosition.x;
+      const screenY = editingTextCanvasPosition.y * stageScale + stagePosition.y;
+      setEditingTextPosition({ x: screenX, y: screenY });
+    }
+  }, [stageScale, stagePosition, isEditingText, editingTextCanvasPosition]);
 
   // Ensure stage dragging is always enabled on mount and cleanup
   useEffect(() => {
@@ -124,16 +143,23 @@ function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete key to delete selected shape)
+  // Handle keyboard events (Delete to delete, Escape to deselect)
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      // Delete or Backspace key
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
-        // Don't delete if user is typing in an input field
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-          return;
-        }
+      // Don't handle if user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
 
+      // Escape key - deselect active shape
+      if (e.key === 'Escape' && selectedShapeId) {
+        selectShape(null);
+        console.log('Shape deselected with Escape key');
+        return;
+      }
+
+      // Delete or Backspace key - delete selected shape
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeId) {
         // Check if shape is locked
         if (isLockedByOther(selectedShapeId)) {
           console.log('Cannot delete - shape is locked by another user');
@@ -151,7 +177,7 @@ function Canvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeId, isLockedByOther, deleteShape]);
+  }, [selectedShapeId, isLockedByOther, deleteShape, selectShape]);
 
   /**
    * Create a shape at the given position
@@ -186,6 +212,8 @@ function Canvas() {
           fill: selectedColor,
           opacity: SHAPE_DEFAULTS.OPACITY,
           rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
         };
       } else {
         // For rectangles, x/y is top-left corner, so offset by half width/height to center on cursor
@@ -450,14 +478,43 @@ function Canvas() {
     const stage = stageRef.current;
     if (!stage) return;
     
+    // Get the actual text node to measure dimensions
+    let textWidth = 100;
+    let textHeight = 32;
+    if (existingShape?.id) {
+      const textNode = shapeRefs.current[existingShape.id];
+      if (textNode) {
+        // For text in a Group, find the actual Text node
+        const actualTextNode = textNode.findOne('Text');
+        if (actualTextNode) {
+          textWidth = actualTextNode.width();
+          textHeight = actualTextNode.height();
+        }
+      }
+    }
+    
+    // Store canvas coordinates (not screen coordinates)
+    setEditingTextCanvasPosition({ x, y });
+    
     // Convert canvas position to screen position for textarea
     const scale = stageScale;
     const screenX = x * scale + stagePosition.x;
     const screenY = y * scale + stagePosition.y;
     
+    // Capture transformation properties for inline editing
+    const transform = {
+      fontSize: existingShape?.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE,
+      rotation: existingShape?.rotation || 0,
+      scaleX: existingShape?.scaleX || 1,
+      scaleY: existingShape?.scaleY || 1,
+      width: textWidth,
+      height: textHeight,
+    };
+    
     setEditingTextPosition({ x: screenX, y: screenY });
     setEditingTextValue(existingShape?.text || '');
     setEditingShapeId(existingShape?.id || null);
+    setEditingTextTransform(transform);
     setIsEditingText(true);
     
     // Focus textarea after state update
@@ -646,7 +703,6 @@ function Canvas() {
         node.scaleX(1);
         node.scaleY(1);
       } else if (shape.type === SHAPE_TYPES.CIRCLE) {
-        // For circles, allow ellipse transformation (independent width/height)
         const newWidth = node.width() * node.scaleX();
         const newHeight = node.height() * node.scaleY();
         
@@ -661,19 +717,17 @@ function Canvas() {
         node.scaleX(1);
         node.scaleY(1);
       } else if (shape.type === SHAPE_TYPES.TEXT) {
-        // For text, scale the fontSize instead of width/height
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
+        // For text, preserve independent scaleX and scaleY for distortion
+        // The node already has the accumulated scale (from prop + transformer delta)
+        // So we can use it directly
+        const newScaleX = node.scaleX();
+        const newScaleY = node.scaleY();
         
-        // Use the average of scaleX and scaleY for uniform text scaling
-        const avgScale = (scaleX + scaleY) / 2;
-        const newFontSize = (shape.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE) * avgScale;
+        updates.scaleX = newScaleX;
+        updates.scaleY = newScaleY;
         
-        updates.fontSize = Math.max(8, newFontSize); // Minimum font size of 8
-        
-        // Reset scale to 1
-        node.scaleX(1);
-        node.scaleY(1);
+        // Node already has the correct scale, no need to update it
+        // (this prevents flicker since it stays consistent until React re-renders)
       }
 
       // Update shape in Firestore
@@ -922,6 +976,11 @@ function Canvas() {
         <Layer>
           {/* Real-time shapes from Firestore */}
           {shapes.map((shape) => {
+            // Hide the shape if it's currently being edited
+            if (isEditingText && editingShapeId === shape.id) {
+              return null;
+            }
+            
             // Get the color and name of the user who locked this shape
             const lockedByUser = shape.lockedBy ? presence[shape.lockedBy] : null;
             const lockerColor = lockedByUser?.color || null;
@@ -973,42 +1032,58 @@ function Canvas() {
         </Layer>
       </Stage>
       
-      {/* Text editing overlay */}
-      {isEditingText && (
-        <textarea
-          ref={textareaRef}
-          className="text-editor"
-          value={editingTextValue}
-          onChange={(e) => setEditingTextValue(e.target.value)}
-          onBlur={finishTextEditing}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              cancelTextEditing();
-            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-              e.preventDefault();
-              finishTextEditing();
-            }
-          }}
-          style={{
-            position: 'absolute',
-            left: `${editingTextPosition.x}px`,
-            top: `${editingTextPosition.y}px`,
-            fontSize: `${SHAPE_DEFAULTS.TEXT_FONT_SIZE * stageScale}px`,
-            fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
-            color: selectedColor,
-            background: 'rgba(255, 255, 255, 0.95)',
-            border: '2px solid #0066ff',
-            borderRadius: '4px',
-            padding: '4px 8px',
-            outline: 'none',
-            resize: 'none',
-            minWidth: '100px',
-            minHeight: '32px',
-            zIndex: 1000,
-          }}
-        />
-      )}
+      {/* Text editing overlay - positioned and transformed to match text */}
+      {isEditingText && (() => {
+        // Calculate the actual visual dimensions (text dimensions * scale * stage zoom)
+        const visualWidth = editingTextTransform.width * editingTextTransform.scaleX * stageScale;
+        const visualHeight = editingTextTransform.height * editingTextTransform.scaleY * stageScale;
+        const avgScale = (editingTextTransform.scaleX + editingTextTransform.scaleY) / 2;
+        const visualFontSize = editingTextTransform.fontSize * avgScale * stageScale;
+        
+        return (
+          <textarea
+            ref={textareaRef}
+            className="text-editor"
+            value={editingTextValue}
+            onChange={(e) => setEditingTextValue(e.target.value)}
+            onBlur={finishTextEditing}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                cancelTextEditing();
+              } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                finishTextEditing();
+              }
+            }}
+            style={{
+              position: 'absolute',
+              left: `${editingTextPosition.x}px`,
+              top: `${editingTextPosition.y}px`,
+              fontSize: `${visualFontSize}px`,
+              fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+              color: selectedColor,
+              background: 'transparent',
+              border: '1px solid #0066ff',
+              padding: '0',
+              margin: '0',
+              outline: 'none',
+              resize: 'none',
+              overflow: 'hidden',
+              whiteSpace: 'pre',
+              lineHeight: '1',
+              transformOrigin: 'top left',
+              transform: `rotate(${editingTextTransform.rotation}deg)`,
+              zIndex: 1000,
+              boxSizing: 'border-box',
+              width: `${visualWidth}px`,
+              height: `${visualHeight}px`,
+              minWidth: '20px',
+              minHeight: '20px',
+            }}
+          />
+        );
+      })()}
     </div>
   );
 }

@@ -4,7 +4,8 @@ import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
 
 /**
  * TextShape Component  
- * Renders text with a bounding box for visual feedback when selected/locked
+ * Renders text with a bounding box for visual feedback when locked by others
+ * Note: Scale is applied to the parent Group, not this component
  */
 function TextShape({ 
   text, 
@@ -16,6 +17,8 @@ function TextShape({
   isLocked, 
   lockerColor,
   finalStrokeWidth,
+  textScaleX,
+  textScaleY,
   shapeRef 
 }) {
   const textRef = useRef(null);
@@ -24,9 +27,12 @@ function TextShape({
   // Measure text dimensions after render
   useEffect(() => {
     if (textRef.current) {
-      const width = textRef.current.getTextWidth();
-      const height = textRef.current.height();
-      setTextDimensions({ width, height });
+      const baseWidth = textRef.current.getTextWidth();
+      const baseHeight = textRef.current.height();
+      setTextDimensions({ 
+        width: baseWidth, 
+        height: baseHeight 
+      });
     }
   }, [text, fontSize, fontFamily]);
   
@@ -39,20 +45,21 @@ function TextShape({
   
   return (
     <>
-      {/* Bounding box rectangle for selected/locked state */}
-      {(isSelected || isLocked) && textDimensions.width > 0 && (
+      {/* Bounding box rectangle for locked state only (not when just selected) */}
+      {/* For text, we only show the box when locked by another user */}
+      {isLocked && textDimensions.width > 0 && (
         <KonvaRect
           x={0}
           y={0}
           width={textDimensions.width}
           height={textDimensions.height}
           fill="transparent"
-          stroke={isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : '#999999')}
+          stroke={lockerColor || '#999999'}
           strokeWidth={finalStrokeWidth}
           listening={false}
         />
       )}
-      {/* The actual text */}
+      {/* The actual text - scale is applied by parent Group */}
       <Text
         ref={textRef}
         x={0}
@@ -98,6 +105,8 @@ function Shape({
   onDoubleClick = null,
   shapeRef = null,
 }) {
+  const nodeRef = useRef(null);
+  const [isHovering, setIsHovering] = useState(false);
   const {
     id,
     type = SHAPE_TYPES.RECTANGLE,
@@ -115,7 +124,28 @@ function Shape({
     text = SHAPE_DEFAULTS.TEXT_DEFAULT,
     fontSize = SHAPE_DEFAULTS.TEXT_FONT_SIZE,
     fontFamily = SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+    scaleX = 1,
+    scaleY = 1,
   } = shapeData;
+
+  // Update cursor when selection state changes while hovering
+  useEffect(() => {
+    if (isHovering && nodeRef.current) {
+      const stage = nodeRef.current.getStage();
+      if (stage) {
+        const container = stage.container();
+        if (isLocked) {
+          container.style.cursor = 'not-allowed';
+        } else if (isSelected) {
+          container.style.cursor = 'move';
+        } else if (type === SHAPE_TYPES.TEXT) {
+          container.style.cursor = 'text';
+        } else {
+          container.style.cursor = 'grab';
+        }
+      }
+    }
+  }, [isSelected, isLocked, isHovering, type]);
 
   // Calculate stroke width - only apply inverse scaling to locked shapes
   const inverseScale = 1 / stageScale;
@@ -144,7 +174,10 @@ function Shape({
     opacity: isLocked ? opacity * 0.5 : opacity,
     rotation,
     draggable: !isLocked,
-    ref: shapeRef,
+    ref: (node) => {
+      nodeRef.current = node;
+      if (shapeRef) shapeRef(node);
+    },
     onDragStart: (e) => {
       if (onDragStart && !isLocked) {
         onDragStart(e, shapeData);
@@ -191,16 +224,21 @@ function Shape({
     shadowOpacity: isSelected ? 0.5 : 0,
     // Cursor styling
     onMouseEnter: (e) => {
+      setIsHovering(true);
       const container = e.target.getStage().container();
       if (isLocked) {
         container.style.cursor = 'not-allowed';
+      } else if (isSelected) {
+        // Show move cursor for selected/active shapes
+        container.style.cursor = 'move';
       } else if (type === SHAPE_TYPES.TEXT) {
         container.style.cursor = 'text';
       } else {
-        container.style.cursor = 'move';
+        container.style.cursor = 'grab';
       }
     },
     onMouseLeave: (e) => {
+      setIsHovering(false);
       const container = e.target.getStage().container();
       container.style.cursor = 'default';
     },
@@ -226,6 +264,8 @@ function Shape({
           ref={shapeRef}
           stroke={undefined}
           strokeWidth={undefined}
+          scaleX={scaleX}
+          scaleY={scaleY}
         >
           <TextShape
             text={text}
@@ -237,6 +277,8 @@ function Shape({
             isLocked={isLocked}
             lockerColor={lockerColor}
             finalStrokeWidth={finalStrokeWidth}
+            textScaleX={scaleX}
+            textScaleY={scaleY}
             shapeRef={null}
           />
         </Group>

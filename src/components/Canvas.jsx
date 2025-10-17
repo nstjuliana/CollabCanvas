@@ -284,6 +284,24 @@ function Canvas() {
   };
 
   /**
+   * Check if a click event is on a user-created shape
+   */
+  const isClickOnShape = (e) => {
+    // Check the target and its ancestors for a shape ID
+    let node = e.target;
+    while (node) {
+      if (node.attrs && node.attrs.id && typeof node.attrs.id === 'string') {
+        // Verify it's actually one of our shapes
+        if (shapes.some(s => s.id === node.attrs.id)) {
+          return true;
+        }
+      }
+      node = node.parent;
+    }
+    return false;
+  };
+
+  /**
    * Handle double-click on canvas to create a new shape
    */
   const handleCanvasDoubleClick = async (e) => {
@@ -292,12 +310,8 @@ function Canvas() {
       return;
     }
 
-    // Ignore if clicking on a user-created shape
-    // Shapes have an 'id' attribute that matches our Firestore shape IDs
-    const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
-    
-    // Don't create if clicking on an existing shape
-    if (hasShapeId) {
+    // Don't create if clicking on an existing shape (check target and parents)
+    if (isClickOnShape(e)) {
       return;
     }
 
@@ -318,9 +332,8 @@ function Canvas() {
       return;
     }
 
-    // Ignore if clicking on a user-created shape
-    const hasShapeId = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
-    if (hasShapeId) {
+    // Don't create if clicking on an existing shape
+    if (isClickOnShape(e)) {
       return;
     }
 
@@ -494,8 +507,8 @@ function Canvas() {
    * Handle canvas click for text tool or deselecting shapes
    */
   const handleCanvasClick = async (e) => {
-    // Check if we clicked on a user-created shape (they have string IDs matching Firestore)
-    const clickedOnShape = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string' && shapes.some(s => s.id === e.target.attrs.id);
+    // Check if we clicked on a user-created shape
+    const clickedOnShape = isClickOnShape(e);
     
     // If text tool is selected and we didn't click on a shape, start text editing
     if (selectedTool === TOOL_TYPES.TEXT && !clickedOnShape) {
@@ -522,8 +535,7 @@ function Canvas() {
     if (!isShiftPressed) return;
     
     // Don't start selection box if clicking on a shape
-    const clickedOnShape = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string';
-    if (clickedOnShape) return;
+    if (isClickOnShape(e)) return;
 
     const stage = stageRef.current;
     const pointerPosition = stage.getPointerPosition();

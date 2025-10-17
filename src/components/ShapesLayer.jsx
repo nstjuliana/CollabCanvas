@@ -47,7 +47,7 @@ function ShapesLayer({
             onDragStart={(e) => onShapeDragStart(e, shape)}
             onDragEnd={(e) => onShapeDragEnd(e, shape)}
             onClick={(e) => onShapeClick(e, shape)}
-            onDblClick={(e) => onShapeDoubleClick(e, shape)}
+            onDoubleClick={(e) => onShapeDoubleClick(e, shape)}
             shapeRef={(node) => {
               if (node) {
                 shapeRefs.current[shape.id] = node;

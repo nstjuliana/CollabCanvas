@@ -894,6 +894,8 @@ function Canvas() {
           imageUrl,
           opacity: SHAPE_DEFAULTS.OPACITY,
           rotation: 0,
+          scaleX: 1,
+          scaleY: 1,
         };
 
         await createShape(newShape);
@@ -982,8 +984,8 @@ function Canvas() {
     // Reset scale to 1 after applying it to width/height
     node.scaleX(1);
     node.scaleY(1);
-  } else if (shape.type === SHAPE_TYPES.TEXT) {
-    // For text, preserve independent scaleX and scaleY for distortion
+  } else if (shape.type === SHAPE_TYPES.TEXT || shape.type === SHAPE_TYPES.IMAGE) {
+    // For text and images, preserve independent scaleX and scaleY for distortion/resizing
     updates.scaleX = node.scaleX();
     updates.scaleY = node.scaleY();
   }

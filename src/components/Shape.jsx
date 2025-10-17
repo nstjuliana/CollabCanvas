@@ -232,6 +232,9 @@ function Shape({
   } else if (isSelected) {
     // Selected shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth + 2;
+  } else if (isHovering && type === SHAPE_TYPES.IMAGE) {
+    // Hovering images: use fixed stroke width regardless of zoom or image scale
+    finalStrokeWidth = 4;
   } else if (isHovering) {
     // Hovering shapes: slightly thicker stroke to indicate interactivity
     finalStrokeWidth = strokeWidth + 19.5;
@@ -250,6 +253,8 @@ function Shape({
     strokeWidth: finalStrokeWidth,
     opacity: isLocked ? opacity * 0.5 : (isHovering ? 1.0 : opacity),
     rotation,
+    scaleX,
+    scaleY,
     draggable: !isLocked,
     ref: (node) => {
       nodeRef.current = node;

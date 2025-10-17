@@ -3,8 +3,73 @@ import { Rect, Ellipse, Group, Text, Rect as KonvaRect } from 'react-konva';
 import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
 
 /**
+ * TextShape Component  
+ * Renders text with a bounding box for visual feedback when selected/locked
+ */
+function TextShape({ 
+  text, 
+  fontSize, 
+  fontFamily, 
+  fill, 
+  opacity, 
+  isSelected, 
+  isLocked, 
+  lockerColor,
+  finalStrokeWidth,
+  shapeRef 
+}) {
+  const textRef = useRef(null);
+  const [textDimensions, setTextDimensions] = useState({ width: 0, height: 0 });
+  
+  // Measure text dimensions after render
+  useEffect(() => {
+    if (textRef.current) {
+      const width = textRef.current.getTextWidth();
+      const height = textRef.current.height();
+      setTextDimensions({ width, height });
+    }
+  }, [text, fontSize, fontFamily]);
+  
+  // Pass the text node ref to parent
+  useEffect(() => {
+    if (shapeRef && textRef.current) {
+      shapeRef(textRef.current);
+    }
+  }, [shapeRef]);
+  
+  return (
+    <>
+      {/* Bounding box rectangle for selected/locked state */}
+      {(isSelected || isLocked) && textDimensions.width > 0 && (
+        <KonvaRect
+          x={0}
+          y={0}
+          width={textDimensions.width}
+          height={textDimensions.height}
+          fill="transparent"
+          stroke={isSelected ? '#0066ff' : (isLocked && lockerColor ? lockerColor : '#999999')}
+          strokeWidth={finalStrokeWidth}
+          listening={false}
+        />
+      )}
+      {/* The actual text */}
+      <Text
+        ref={textRef}
+        x={0}
+        y={0}
+        text={text}
+        fontSize={fontSize}
+        fontFamily={fontFamily}
+        fill={fill}
+        opacity={isLocked ? opacity * 0.5 : opacity}
+      />
+    </>
+  );
+}
+
+/**
  * Shape Component
- * Renders a shape on the canvas (rectangle, circle, etc.)
+ * Renders a shape on the canvas (rectangle, circle, text, etc.)
  * 
  * @param {object} shapeData - Shape data including type, position, size, color, etc.
  * @param {boolean} isSelected - Whether the shape is currently selected
@@ -16,6 +81,7 @@ import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
  * @param {function} onDragMove - Callback during drag
  * @param {function} onDragEnd - Callback when drag ends
  * @param {function} onClick - Callback when shape is clicked
+ * @param {function} onDoubleClick - Callback when shape is double-clicked
  * @param {function} shapeRef - Ref callback for the shape node
  */
 function Shape({
@@ -29,6 +95,7 @@ function Shape({
   onDragMove = null,
   onDragEnd = null,
   onClick = null,
+  onDoubleClick = null,
   shapeRef = null,
 }) {
   const {
@@ -44,6 +111,10 @@ function Shape({
     cornerRadius = SHAPE_DEFAULTS.CORNER_RADIUS,
     opacity = SHAPE_DEFAULTS.OPACITY,
     rotation = 0,
+    // Text-specific properties
+    text = SHAPE_DEFAULTS.TEXT_DEFAULT,
+    fontSize = SHAPE_DEFAULTS.TEXT_FONT_SIZE,
+    fontFamily = SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
   } = shapeData;
 
   // Calculate stroke width - only apply inverse scaling to locked shapes
@@ -104,6 +175,16 @@ function Shape({
         onClick(e, shapeData);
       }
     },
+    onDblClick: (e) => {
+      if (onDoubleClick) {
+        onDoubleClick(e, shapeData);
+      }
+    },
+    onDblTap: (e) => {
+      if (onDoubleClick) {
+        onDoubleClick(e, shapeData);
+      }
+    },
     // Visual feedback
     shadowColor: isSelected ? '#0066ff' : 'black',
     shadowBlur: isSelected ? 10 : 0,
@@ -113,6 +194,8 @@ function Shape({
       const container = e.target.getStage().container();
       if (isLocked) {
         container.style.cursor = 'not-allowed';
+      } else if (type === SHAPE_TYPES.TEXT) {
+        container.style.cursor = 'text';
       } else {
         container.style.cursor = 'move';
       }
@@ -133,6 +216,30 @@ function Shape({
           radiusX={width / 2}  // Horizontal radius
           radiusY={height / 2} // Vertical radius (allows ellipse)
         />
+      );
+      break;
+
+    case SHAPE_TYPES.TEXT:
+      shapeElement = (
+        <Group
+          {...commonProps}
+          ref={shapeRef}
+          stroke={undefined}
+          strokeWidth={undefined}
+        >
+          <TextShape
+            text={text}
+            fontSize={fontSize}
+            fontFamily={fontFamily}
+            fill={fill}
+            opacity={opacity}
+            isSelected={isSelected}
+            isLocked={isLocked}
+            lockerColor={lockerColor}
+            finalStrokeWidth={finalStrokeWidth}
+            shapeRef={null}
+          />
+        </Group>
       );
       break;
 

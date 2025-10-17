@@ -65,6 +65,13 @@ function Canvas() {
   
   const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
   const [selectedColor, setSelectedColor] = useState(DEFAULT_SHAPE_COLOR);
+  
+  // Text editing state
+  const [isEditingText, setIsEditingText] = useState(false);
+  const [editingTextPosition, setEditingTextPosition] = useState({ x: 0, y: 0 });
+  const [editingTextValue, setEditingTextValue] = useState('');
+  const [editingShapeId, setEditingShapeId] = useState(null);
+  const textareaRef = useRef(null);
 
   // Handle window resize and measure container
   useEffect(() => {
@@ -149,7 +156,7 @@ function Canvas() {
   /**
    * Create a shape at the given position
    */
-  const createShapeAtPosition = async (canvasPos) => {
+  const createShapeAtPosition = async (canvasPos, text = SHAPE_DEFAULTS.TEXT_DEFAULT) => {
     try {
       let newShape;
       
@@ -164,6 +171,19 @@ function Canvas() {
           fill: selectedColor,
           stroke: '#333333',
           strokeWidth: SHAPE_DEFAULTS.STROKE_WIDTH,
+          opacity: SHAPE_DEFAULTS.OPACITY,
+          rotation: 0,
+        };
+      } else if (selectedTool === TOOL_TYPES.TEXT) {
+        // For text, x/y is the top-left corner
+        newShape = {
+          type: SHAPE_TYPES.TEXT,
+          x: canvasPos.x,
+          y: canvasPos.y,
+          text: text,
+          fontSize: SHAPE_DEFAULTS.TEXT_FONT_SIZE,
+          fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+          fill: selectedColor,
           opacity: SHAPE_DEFAULTS.OPACITY,
           rotation: 0,
         };
@@ -184,10 +204,12 @@ function Canvas() {
         };
       }
 
-      await createShape(newShape);
+      const shapeId = await createShape(newShape);
       console.log('Shape created at', canvasPos);
+      return shapeId;
     } catch (err) {
       console.error('Failed to create shape:', err);
+      return null;
     }
   };
 
@@ -349,6 +371,32 @@ function Canvas() {
       console.log('Shape selected:', shape.id);
     }
   };
+  
+  /**
+   * Handle shape double-click for text editing
+   */
+  const onShapeDoubleClick = async (e, shape) => {
+    e.cancelBubble = true; // Prevent canvas double-click
+    
+    // Only allow editing text shapes
+    if (shape.type !== SHAPE_TYPES.TEXT) return;
+    
+    // Check if shape is locked by another user
+    if (isLockedByOther(shape.id)) {
+      console.log('Cannot edit - text is locked by another user');
+      return;
+    }
+    
+    // Lock the shape for editing
+    const success = await handleShapeDragStart(shape.id);
+    if (!success) {
+      console.log('Could not lock text shape for editing');
+      return;
+    }
+    
+    // Start text editing
+    startTextEditing(shape.x, shape.y, shape);
+  };
 
   /**
    * Handle color change from color picker
@@ -371,17 +419,129 @@ function Canvas() {
   };
 
   /**
-   * Handle canvas click to deselect shapes
+   * Handle canvas click for text tool or deselecting shapes
    */
-  const handleCanvasClick = (e) => {
+  const handleCanvasClick = async (e) => {
     // Check if we clicked on a user-created shape (they have string IDs matching Firestore)
     const clickedOnShape = e.target.attrs && e.target.attrs.id && typeof e.target.attrs.id === 'string' && shapes.some(s => s.id === e.target.attrs.id);
+    
+    // If text tool is selected and we didn't click on a shape, start text editing
+    if (selectedTool === TOOL_TYPES.TEXT && !clickedOnShape) {
+      const stage = stageRef.current;
+      const pointerPosition = stage.getPointerPosition();
+      const canvasPos = screenToCanvas(stage, pointerPosition);
+      
+      // Start text editing at click position
+      startTextEditing(canvasPos.x, canvasPos.y);
+      return;
+    }
     
     // If we didn't click on a shape and have a selection, deselect it
     if (!clickedOnShape && selectedShapeId) {
       selectShape(null);
       console.log('Shape deselected');
     }
+  };
+  
+  /**
+   * Start text editing at a position
+   */
+  const startTextEditing = (x, y, existingShape = null) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    
+    // Convert canvas position to screen position for textarea
+    const scale = stageScale;
+    const screenX = x * scale + stagePosition.x;
+    const screenY = y * scale + stagePosition.y;
+    
+    setEditingTextPosition({ x: screenX, y: screenY });
+    setEditingTextValue(existingShape?.text || '');
+    setEditingShapeId(existingShape?.id || null);
+    setIsEditingText(true);
+    
+    // Focus textarea after state update
+    setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.select();
+      }
+    }, 0);
+  };
+  
+  /**
+   * Finish text editing and save
+   */
+  const finishTextEditing = async () => {
+    if (!isEditingText) return;
+    
+    const text = editingTextValue.trim();
+    const wasEditingExisting = editingShapeId !== null;
+    
+    // Only save if there's text
+    if (text) {
+      if (editingShapeId) {
+        // Update existing text shape
+        try {
+          await updateShape(editingShapeId, { text });
+          console.log('Text shape updated:', editingShapeId);
+        } catch (err) {
+          console.error('Failed to update text shape:', err);
+        }
+      } else {
+        // Create new text shape at the clicked position
+        const stage = stageRef.current;
+        if (stage) {
+          // Convert screen position back to canvas position
+          const canvasX = (editingTextPosition.x - stagePosition.x) / stageScale;
+          const canvasY = (editingTextPosition.y - stagePosition.y) / stageScale;
+          
+          await createShapeAtPosition({ x: canvasX, y: canvasY }, text);
+        }
+      }
+    } else if (editingShapeId) {
+      // If text is empty and we're editing an existing shape, delete it
+      try {
+        await deleteShape(editingShapeId);
+        console.log('Empty text shape deleted:', editingShapeId);
+      } catch (err) {
+        console.error('Failed to delete text shape:', err);
+      }
+    }
+    
+    // Unlock the shape if we were editing an existing one
+    if (wasEditingExisting && editingShapeId) {
+      try {
+        await unlockShape(editingShapeId);
+        console.log('Text shape unlocked after editing');
+      } catch (err) {
+        console.error('Failed to unlock text shape:', err);
+      }
+    }
+    
+    // Reset editing state
+    setIsEditingText(false);
+    setEditingTextValue('');
+    setEditingShapeId(null);
+  };
+  
+  /**
+   * Cancel text editing
+   */
+  const cancelTextEditing = async () => {
+    // Unlock the shape if we were editing an existing one
+    if (editingShapeId) {
+      try {
+        await unlockShape(editingShapeId);
+        console.log('Text shape unlocked after canceling edit');
+      } catch (err) {
+        console.error('Failed to unlock text shape:', err);
+      }
+    }
+    
+    setIsEditingText(false);
+    setEditingTextValue('');
+    setEditingShapeId(null);
   };
 
   /**
@@ -500,6 +660,20 @@ function Canvas() {
         // Reset scale to 1
         node.scaleX(1);
         node.scaleY(1);
+      } else if (shape.type === SHAPE_TYPES.TEXT) {
+        // For text, scale the fontSize instead of width/height
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        
+        // Use the average of scaleX and scaleY for uniform text scaling
+        const avgScale = (scaleX + scaleY) / 2;
+        const newFontSize = (shape.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE) * avgScale;
+        
+        updates.fontSize = Math.max(8, newFontSize); // Minimum font size of 8
+        
+        // Reset scale to 1
+        node.scaleX(1);
+        node.scaleY(1);
       }
 
       // Update shape in Firestore
@@ -540,6 +714,13 @@ function Canvas() {
           title="Circle Tool (Double-click to create)"
         >
           ⬤
+        </button>
+        <button
+          onClick={() => setSelectedTool(TOOL_TYPES.TEXT)}
+          className={`toolbar-button ${selectedTool === TOOL_TYPES.TEXT ? 'active' : ''}`}
+          title="Text Tool (Click to add text)"
+        >
+          T
         </button>
         
         <div className="toolbar-divider"></div>
@@ -613,6 +794,8 @@ function Canvas() {
           🖱️ Drag to pan • 🖲️ Scroll to zoom • 
           {selectedTool === TOOL_TYPES.DELETE 
             ? ' Click shapes to delete' 
+            : selectedTool === TOOL_TYPES.TEXT
+            ? ' Click to add text • Double-click text to edit'
             : selectedShapeId
             ? ' Selected shape - change color in toolbar'
             : ` Double-click to create ${selectedTool} • Click shapes to edit`}
@@ -756,6 +939,7 @@ function Canvas() {
                 onDragStart={onShapeDragStart}
                 onDragEnd={onShapeDragEnd}
                 onClick={onShapeClick}
+                onDoubleClick={onShapeDoubleClick}
                 shapeRef={(node) => {
                   if (node) {
                     shapeRefs.current[shape.id] = node;
@@ -788,6 +972,43 @@ function Canvas() {
           ))}
         </Layer>
       </Stage>
+      
+      {/* Text editing overlay */}
+      {isEditingText && (
+        <textarea
+          ref={textareaRef}
+          className="text-editor"
+          value={editingTextValue}
+          onChange={(e) => setEditingTextValue(e.target.value)}
+          onBlur={finishTextEditing}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              cancelTextEditing();
+            } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault();
+              finishTextEditing();
+            }
+          }}
+          style={{
+            position: 'absolute',
+            left: `${editingTextPosition.x}px`,
+            top: `${editingTextPosition.y}px`,
+            fontSize: `${SHAPE_DEFAULTS.TEXT_FONT_SIZE * stageScale}px`,
+            fontFamily: SHAPE_DEFAULTS.TEXT_FONT_FAMILY,
+            color: selectedColor,
+            background: 'rgba(255, 255, 255, 0.95)',
+            border: '2px solid #0066ff',
+            borderRadius: '4px',
+            padding: '4px 8px',
+            outline: 'none',
+            resize: 'none',
+            minWidth: '100px',
+            minHeight: '32px',
+            zIndex: 1000,
+          }}
+        />
+      )}
     </div>
   );
 }

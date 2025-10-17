@@ -988,42 +988,26 @@ function Canvas() {
       };
 
       // For rectangles, update width and height
-      if (shape.type === SHAPE_TYPES.RECTANGLE) {
-        const newWidth = node.width() * node.scaleX();
-        const newHeight = node.height() * node.scaleY();
-        
-        updates.width = newWidth;
-        updates.height = newHeight;
-        
-        // Update the node's dimensions immediately to prevent flicker
-        node.width(newWidth);
-        node.height(newHeight);
-        
-        // Reset scale to 1 after applying it to width/height
-        node.scaleX(1);
-        node.scaleY(1);
-      } else if (shape.type === SHAPE_TYPES.CIRCLE) {
-        const newWidth = node.width() * node.scaleX();
-        const newHeight = node.height() * node.scaleY();
-        
-        updates.width = newWidth;
-        updates.height = newHeight;
-        
-        // Update the node's dimensions immediately to prevent flicker
-        node.width(newWidth);
-        node.height(newHeight);
-        
-        // Reset scale to 1
-        node.scaleX(1);
-        node.scaleY(1);
-      } else if (shape.type === SHAPE_TYPES.TEXT) {
-        // For text, preserve independent scaleX and scaleY for distortion
-        const newScaleX = node.scaleX();
-        const newScaleY = node.scaleY();
-        
-        updates.scaleX = newScaleX;
-        updates.scaleY = newScaleY;
-      }
+      // Bake scaling into dimensions for rectangles and circles; preserve scale for text
+if (shape.type === SHAPE_TYPES.RECTANGLE || shape.type === SHAPE_TYPES.CIRCLE) {
+  const newWidth = node.width() * node.scaleX();
+  const newHeight = node.height() * node.scaleY();
+  
+  updates.width = newWidth;
+  updates.height = newHeight;
+  
+  // Update the node's dimensions immediately to prevent flicker
+  node.width(newWidth);
+  node.height(newHeight);
+  
+  // Reset scale to 1 after applying it to width/height
+  node.scaleX(1);
+  node.scaleY(1);
+} else if (shape.type === SHAPE_TYPES.TEXT) {
+  // For text, preserve independent scaleX and scaleY for distortion
+  updates.scaleX = node.scaleX();
+  updates.scaleY = node.scaleY();
+}
 
       // Update shape in Firestore
       await updateShape(transformedShapeId, updates);

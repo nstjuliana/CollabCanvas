@@ -110,12 +110,113 @@ Automatically scales and positions canvas to fit entire workspace in view:
 - Centers canvas
 - Adds 10% padding
 
-## Future Hooks
+### useUndoRedo.js
+Custom hook for managing undo/redo history for canvas operations.
 
-Hooks to be implemented in later tasks:
+**Features:**
+- Tracks last 10 actions in history
+- Supports undo (Ctrl+Z) and redo (Ctrl+Y)
+- Handles CREATE, UPDATE, DELETE, and DELETE_MULTIPLE actions
+- Prevents history loops during undo/redo operations
+- Automatic redo stack clearing on new actions
+
+**Action Types:**
+```javascript
+ACTION_TYPES = {
+  CREATE: 'CREATE',           // Shape creation
+  UPDATE: 'UPDATE',           // Shape updates (position, size, color, etc.)
+  DELETE: 'DELETE',           // Single shape deletion
+  DELETE_MULTIPLE: 'DELETE_MULTIPLE', // Multiple shape deletion
+}
+```
+
+**Returns:**
+```javascript
+{
+  canUndo,        // Boolean - can undo
+  canRedo,        // Boolean - can redo
+  undoStack,      // Array of undo actions
+  redoStack,      // Array of redo actions
+  addToHistory,   // Function to add action to history
+  undo,           // Function to undo last action
+  redo,           // Function to redo last undone action
+  clearHistory,   // Function to clear all history
+  startUndoRedo,  // Function to start undo/redo operation
+  endUndoRedo,    // Function to end undo/redo operation
+}
+```
+
+**Usage:**
+```jsx
+import useUndoRedo, { ACTION_TYPES } from './hooks/useUndoRedo';
+
+function Canvas() {
+  const {
+    canUndo,
+    canRedo,
+    addToHistory,
+    undo,
+    redo,
+    startUndoRedo,
+    endUndoRedo,
+  } = useUndoRedo();
+
+  // When creating a shape
+  const createShape = async (shapeData) => {
+    const shapeId = await createShapeService(shapeData);
+    addToHistory({
+      type: ACTION_TYPES.CREATE,
+      data: { shapeId, shapeData }
+    });
+  };
+
+  // When updating a shape
+  const updateShape = async (shapeId, updates) => {
+    addToHistory({
+      type: ACTION_TYPES.UPDATE,
+      data: {
+        shapeIds: [shapeId],
+        previousStates: [{ id: shapeId, updates: oldState }],
+        newStates: [{ id: shapeId, updates }]
+      }
+    });
+    await updateShapeService(shapeId, updates);
+  };
+
+  // Undo/Redo handlers
+  const handleUndo = async () => {
+    if (!canUndo) return;
+    startUndoRedo();
+    try {
+      const action = undo();
+      // Process action...
+    } finally {
+      endUndoRedo();
+    }
+  };
+}
+```
+
+**History Structure:**
+Each action in history contains:
+- `type` - Action type (CREATE, UPDATE, DELETE, etc.)
+- `data` - Action-specific data needed for undo/redo
+
+**Implementation Details:**
+- Maximum history size: 10 actions
+- Uses LIFO (Last In, First Out) stacks
+- Redo stack clears on new action
+- `startUndoRedo`/`endUndoRedo` prevents recursive history tracking
+
+## Implemented Hooks
+
+Current hooks:
+- `useCanvas.js` - Canvas pan and zoom
 - `useShapes.js` - Shape state management
 - `useCursors.js` - Multiplayer cursor tracking
 - `usePresence.js` - User presence tracking
+- `useUndoRedo.js` - Undo/redo history management
+- `useAgentActions.js` - AI agent action tracking
 
 ## Performance Considerations
 

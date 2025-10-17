@@ -4,6 +4,7 @@ import useCanvas from '../hooks/useCanvas';
 import useShapes from '../hooks/useShapes';
 import useCursors from '../hooks/useCursors';
 import usePresence from '../hooks/usePresence';
+import useUndoRedo, { ACTION_TYPES } from '../hooks/useUndoRedo';
 import Shape from './Shape';
 import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
@@ -62,6 +63,16 @@ function Canvas() {
     updateCursorPosition,
     activeCursorCount,
   } = useCursors();
+
+  const {
+    canUndo,
+    canRedo,
+    addToHistory,
+    undo: undoHistory,
+    redo: redoHistory,
+    startUndoRedo,
+    endUndoRedo,
+  } = useUndoRedo();
 
   const containerRef = useRef(null);
   const transformerRef = useRef(null);
@@ -212,11 +223,25 @@ function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete to delete, Escape to deselect, Arrow keys to nudge)
+  // Handle keyboard events (Delete to delete, Escape to deselect, Arrow keys to nudge, Undo/Redo)
   useEffect(() => {
     const handleKeyDown = async (e) => {
       // Don't handle if user is typing in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Ctrl+Z or Cmd+Z - Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        await handleUndo();
+        return;
+      }
+
+      // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z or Cmd+Shift+Z - Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        await handleRedo();
         return;
       }
 
@@ -235,11 +260,24 @@ function Canvas() {
           return;
         }
 
+        // Store shapes for undo before deleting
+        const deletedShapes = shapesToDelete.map(id => shapes.find(s => s.id === id)).filter(Boolean);
+
         try {
           if (shapesToDelete.length === 1) {
             await deleteShape(shapesToDelete[0]);
+            // Add to history
+            addToHistory({
+              type: ACTION_TYPES.DELETE,
+              data: { shape: deletedShapes[0] }
+            });
           } else {
             await deleteMultipleShapes(shapesToDelete);
+            // Add to history
+            addToHistory({
+              type: ACTION_TYPES.DELETE_MULTIPLE,
+              data: { shapes: deletedShapes }
+            });
           }
         } catch (err) {
         }
@@ -275,6 +313,12 @@ function Canvas() {
             break;
         }
 
+        // Store previous positions for undo
+        const previousStates = shapesToMove.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, x: shape.x, y: shape.y } : null;
+        }).filter(Boolean);
+
         // Update all selected shapes
         try {
           await Promise.all(
@@ -288,6 +332,19 @@ function Canvas() {
               }
             })
           );
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToMove,
+              previousStates: previousStates.map(s => ({ id: s.id, updates: { x: s.x, y: s.y } })),
+              newStates: previousStates.map(s => ({ 
+                id: s.id, 
+                updates: { x: s.x + offsetX, y: s.y + offsetY } 
+              }))
+            }
+          });
         } catch (err) {
         }
       }
@@ -295,7 +352,126 @@ function Canvas() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeIds, shapes, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape, updateShape]);
+  }, [selectedShapeIds, shapes, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape, updateShape, addToHistory]);
+
+  /**
+   * Handle undo operation
+   */
+  const handleUndo = async () => {
+    if (!canUndo) return;
+
+    startUndoRedo();
+    
+    try {
+      const action = undoHistory();
+      if (!action) return;
+
+      switch (action.type) {
+        case ACTION_TYPES.CREATE: {
+          // Undo create by deleting the shape
+          const { shapeId } = action.data;
+          await deleteShape(shapeId);
+          break;
+        }
+
+        case ACTION_TYPES.DELETE: {
+          // Undo delete by recreating the shape
+          const { shape } = action.data;
+          // Remove id and locks to create fresh shape
+          const { id, lockedBy, lockedAt, ...shapeData } = shape;
+          const newShapeId = await createShape(shapeData);
+          // Update the action data with new ID for potential redo
+          action.data.shapeId = newShapeId;
+          break;
+        }
+
+        case ACTION_TYPES.DELETE_MULTIPLE: {
+          // Undo multiple deletes by recreating all shapes
+          const { shapes: deletedShapes } = action.data;
+          const newShapeIds = [];
+          for (const shape of deletedShapes) {
+            const { id, lockedBy, lockedAt, ...shapeData } = shape;
+            const newShapeId = await createShape(shapeData);
+            newShapeIds.push(newShapeId);
+          }
+          // Update the action data with new IDs for potential redo
+          action.data.shapeIds = newShapeIds;
+          break;
+        }
+
+        case ACTION_TYPES.UPDATE: {
+          // Undo update by restoring previous state
+          const { previousStates } = action.data;
+          await Promise.all(
+            previousStates.map(({ id, updates }) => updateShape(id, updates))
+          );
+          break;
+        }
+
+        default:
+          break;
+      }
+    } finally {
+      endUndoRedo();
+    }
+  };
+
+  /**
+   * Handle redo operation
+   */
+  const handleRedo = async () => {
+    if (!canRedo) return;
+
+    startUndoRedo();
+    
+    try {
+      const action = redoHistory();
+      if (!action) return;
+
+      switch (action.type) {
+        case ACTION_TYPES.CREATE: {
+          // Redo create by creating the shape again
+          const { shapeData } = action.data;
+          const shapeId = await createShape(shapeData);
+          // Update the action data with new ID
+          action.data.shapeId = shapeId;
+          break;
+        }
+
+        case ACTION_TYPES.DELETE: {
+          // Redo delete by deleting the shape again
+          const { shapeId } = action.data;
+          if (shapeId) {
+            await deleteShape(shapeId);
+          }
+          break;
+        }
+
+        case ACTION_TYPES.DELETE_MULTIPLE: {
+          // Redo multiple deletes by deleting all shapes again
+          const { shapeIds } = action.data;
+          if (shapeIds && shapeIds.length > 0) {
+            await deleteMultipleShapes(shapeIds);
+          }
+          break;
+        }
+
+        case ACTION_TYPES.UPDATE: {
+          // Redo update by applying new state
+          const { newStates } = action.data;
+          await Promise.all(
+            newStates.map(({ id, updates }) => updateShape(id, updates))
+          );
+          break;
+        }
+
+        default:
+          break;
+      }
+    } finally {
+      endUndoRedo();
+    }
+  };
 
   /**
    * Create a shape at the given position
@@ -324,6 +500,13 @@ function Canvas() {
       // Use shared shape builder - ONE source of truth!
       const newShape = buildShapeObject(selectedTool, x, y, properties);
       const shapeId = await createShape(newShape);
+      
+      // Add to history
+      addToHistory({
+        type: ACTION_TYPES.CREATE,
+        data: { shapeId, shapeData: newShape }
+      });
+      
       return shapeId;
     } catch (err) {
       return null;
@@ -418,11 +601,17 @@ function Canvas() {
     }
   };
 
+  // Track shape position before drag for undo
+  const shapeDragStartPosition = useRef({});
+
   /**
    * Handle shape drag start
    */
   const onShapeDragStart = async (e, shape) => {
     e.cancelBubble = true; // Prevent canvas drag
+    
+    // Store initial position for undo
+    shapeDragStartPosition.current[shape.id] = { x: shape.x, y: shape.y };
     
     // Mark that we're dragging a shape
     isDraggingShapeRef.current = true;
@@ -443,6 +632,8 @@ function Canvas() {
       if (stageRef.current) {
         stageRef.current.draggable(true);
       }
+      // Clean up stored position
+      delete shapeDragStartPosition.current[shape.id];
     }
   };
 
@@ -453,9 +644,24 @@ function Canvas() {
     e.cancelBubble = true; // Prevent event from bubbling to canvas
     
     const node = e.target;
+    const newX = node.x();
+    const newY = node.y();
+    const previousPos = shapeDragStartPosition.current[shape.id];
     
     try {
-      await handleShapeDragEnd(shape.id, node.x(), node.y());
+      await handleShapeDragEnd(shape.id, newX, newY);
+      
+      // Add to history if position actually changed
+      if (previousPos && (previousPos.x !== newX || previousPos.y !== newY)) {
+        addToHistory({
+          type: ACTION_TYPES.UPDATE,
+          data: {
+            shapeIds: [shape.id],
+            previousStates: [{ id: shape.id, updates: { x: previousPos.x, y: previousPos.y } }],
+            newStates: [{ id: shape.id, updates: { x: newX, y: newY } }]
+          }
+        });
+      }
     } finally {
       // Mark that we're done dragging
       isDraggingShapeRef.current = false;
@@ -464,6 +670,9 @@ function Canvas() {
       if (stageRef.current) {
         stageRef.current.draggable(true);
       }
+      
+      // Clean up stored position
+      delete shapeDragStartPosition.current[shape.id];
     }
   };
 
@@ -540,11 +749,27 @@ function Canvas() {
         return;
       }
 
+      // Store previous colors for undo
+      const previousStates = shapesToUpdate.map(id => {
+        const shape = shapes.find(s => s.id === id);
+        return shape ? { id, updates: { fill: shape.fill } } : null;
+      }).filter(Boolean);
+
       try {
         // Update all selected shapes
         await Promise.all(
           shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
         );
+
+        // Add to history
+        addToHistory({
+          type: ACTION_TYPES.UPDATE,
+          data: {
+            shapeIds: shapesToUpdate,
+            previousStates,
+            newStates: shapesToUpdate.map(id => ({ id, updates: { fill: newColor } }))
+          }
+        });
       } catch (err) {
       }
     }
@@ -772,8 +997,23 @@ function Canvas() {
     if (text) {
       if (editingShapeId) {
         // Update existing text shape
+        const shape = shapes.find(s => s.id === editingShapeId);
+        const previousText = shape?.text || '';
+        
         try {
           await updateShape(editingShapeId, { text });
+          
+          // Add to history only if text actually changed
+          if (previousText !== text) {
+            addToHistory({
+              type: ACTION_TYPES.UPDATE,
+              data: {
+                shapeIds: [editingShapeId],
+                previousStates: [{ id: editingShapeId, updates: { text: previousText } }],
+                newStates: [{ id: editingShapeId, updates: { text } }]
+              }
+            });
+          }
         } catch (err) {
         }
       } else {
@@ -789,8 +1029,18 @@ function Canvas() {
       }
     } else if (editingShapeId) {
       // If text is empty and we're editing an existing shape, delete it
+      const shape = shapes.find(s => s.id === editingShapeId);
+      
       try {
         await deleteShape(editingShapeId);
+        
+        // Add to history
+        if (shape) {
+          addToHistory({
+            type: ACTION_TYPES.DELETE,
+            data: { shape }
+          });
+        }
       } catch (err) {
       }
     }
@@ -945,7 +1195,13 @@ function Canvas() {
           scaleY: 1,
         };
 
-        await createShape(newShape);
+        const shapeId = await createShape(newShape);
+        
+        // Add to history
+        addToHistory({
+          type: ACTION_TYPES.CREATE,
+          data: { shapeId, shapeData: newShape }
+        });
       } catch (err) {
         alert(`Failed to upload ${file.name}: ${err.message}`);
       } finally {
@@ -1007,6 +1263,17 @@ function Canvas() {
       
       if (!shape) return;
 
+      // Store previous state for undo
+      const previousState = {
+        x: shape.x,
+        y: shape.y,
+        rotation: shape.rotation,
+        width: shape.width,
+        height: shape.height,
+        scaleX: shape.scaleX,
+        scaleY: shape.scaleY,
+      };
+
       // Get the transformed dimensions and rotation
       const updates = {
         x: node.x(),
@@ -1038,6 +1305,16 @@ function Canvas() {
 
       // Update shape in Firestore
       await updateShape(transformedShapeId, updates);
+
+      // Add to history
+      addToHistory({
+        type: ACTION_TYPES.UPDATE,
+        data: {
+          shapeIds: [transformedShapeId],
+          previousStates: [{ id: transformedShapeId, updates: previousState }],
+          newStates: [{ id: transformedShapeId, updates }]
+        }
+      });
       
     } catch (err) {
     } finally {

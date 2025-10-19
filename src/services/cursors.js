@@ -14,6 +14,7 @@ import {
 } from 'firebase/database';
 import { rtdb, RTDB_PATHS } from './firebase';
 import { getUserId, getUserDisplayName } from './auth';
+import { getUserColor, PRESENCE_COLORS } from '../utils/constants';
 
 /**
  * Publish the current user's cursor position to the Realtime Database
@@ -165,14 +166,8 @@ export async function cleanupCursor() {
  * @param {Array<string>} colors - Array of available colors
  * @returns {string} Hex color code
  */
-export function getUserCursorColor(userId, colors) {
-  // Simple hash function to consistently assign colors to users
-  let hash = 0;
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  
-  const index = Math.abs(hash) % colors.length;
-  return colors[index];
+export function getUserCursorColor(userId, colors = PRESENCE_COLORS) {
+  // Use the shared color assignment function for consistency
+  return getUserColor(userId, colors);
 }
 

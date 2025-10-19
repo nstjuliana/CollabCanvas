@@ -6,15 +6,17 @@ function KeyboardShortcuts() {
   const hideTimeoutRef = useRef(null);
 
   const shortcuts = [
+    { key: 'Double-click', action: 'Create shape' },
+    { key: 'Scroll', action: 'Zoom in/out' },
+    { key: 'Shift + Drag', action: 'Selection box' },
+    { key: 'Ctrl/Cmd + Click', action: 'Multi-select' },
     { key: 'Ctrl/Cmd + Z', action: 'Undo' },
     { key: 'Ctrl/Cmd + Y', action: 'Redo' },
+    { key: 'Ctrl/Cmd + C', action: 'Copy' },
+    { key: 'Ctrl/Cmd + V', action: 'Paste' },
     { key: 'Escape', action: 'Deselect' },
     { key: 'Delete', action: 'Delete shape' },
     { key: 'Arrow Keys', action: 'Nudge shape' },
-    { key: 'Ctrl/Cmd + Click', action: 'Multi-select' },
-    { key: 'Shift + Drag', action: 'Selection box' },
-    { key: 'Double-click', action: 'Create shape' },
-    { key: 'Scroll', action: 'Zoom in/out' },
   ];
 
   const handleMouseEnter = () => {

@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ACTION_TYPES } from './useUndoRedo';
 
 /**
  * Custom hook for handling keyboard shortcuts in the canvas
- * Handles undo/redo, delete, escape, and arrow key nudging
+ * Handles undo/redo, delete, escape, copy/paste, and arrow key nudging
  */
 const useKeyboardShortcuts = ({
   selectedShapeIds,
@@ -15,12 +15,80 @@ const useKeyboardShortcuts = ({
   updateShape,
   addToHistory,
   handleUndo,
-  handleRedo
+  handleRedo,
+  createShape,
+  selectShapes
 }) => {
+  // Clipboard for copy/paste
+  const clipboardRef = useRef(null);
   useEffect(() => {
     const handleKeyDown = async (e) => {
       // Don't handle if user is typing in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Ctrl+C or Cmd+C - Copy
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedShapeIds.length > 0) {
+        e.preventDefault();
+        // Copy selected shapes to clipboard
+        const shapesToCopy = selectedShapeIds
+          .map(id => shapes.find(s => s.id === id))
+          .filter(Boolean);
+        
+        if (shapesToCopy.length > 0) {
+          clipboardRef.current = shapesToCopy;
+          console.log(`Copied ${shapesToCopy.length} shape(s)`);
+        }
+        return;
+      }
+
+      // Ctrl+V or Cmd+V - Paste
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v' && clipboardRef.current) {
+        e.preventDefault();
+        
+        const offset = 20; // Offset for pasted shapes
+        const pastedShapes = [];
+        const newShapeIds = [];
+
+        try {
+          // Create new shapes from clipboard
+          for (const shapeToCopy of clipboardRef.current) {
+            // Create a copy of the shape with offset position
+            const { id, lockedBy, lockedAt, createdAt, updatedAt, ...shapeProps } = shapeToCopy;
+            const newShape = {
+              ...shapeProps,
+              x: shapeProps.x + offset,
+              y: shapeProps.y + offset,
+            };
+
+            const newShapeId = await createShape(newShape);
+            newShapeIds.push(newShapeId);
+            pastedShapes.push({ id: newShapeId, ...newShape });
+          }
+
+          // Select the newly pasted shapes
+          if (newShapeIds.length > 0) {
+            selectShapes(newShapeIds, false);
+            
+            // Add to history for undo
+            if (pastedShapes.length === 1) {
+              addToHistory({
+                type: ACTION_TYPES.CREATE,
+                data: { shape: pastedShapes[0] }
+              });
+            } else {
+              addToHistory({
+                type: ACTION_TYPES.DELETE_MULTIPLE, // Use this for multi-create undo
+                data: { shapes: pastedShapes }
+              });
+            }
+            
+            console.log(`Pasted ${pastedShapes.length} shape(s)`);
+          }
+        } catch (err) {
+          console.error('Error pasting shapes:', err);
+        }
         return;
       }
 
@@ -158,7 +226,9 @@ const useKeyboardShortcuts = ({
     updateShape,
     addToHistory,
     handleUndo,
-    handleRedo
+    handleRedo,
+    createShape,
+    selectShapes
   ]);
 };
 

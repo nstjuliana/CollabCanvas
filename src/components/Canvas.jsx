@@ -116,7 +116,9 @@ function Canvas() {
     updateShape,
     addToHistory,
     handleUndo,
-    handleRedo
+    handleRedo,
+    createShape,
+    selectShapes
   });
 
   // Define state variables before hooks that depend on them

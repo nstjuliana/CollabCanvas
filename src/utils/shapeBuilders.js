@@ -203,6 +203,8 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.points = properties.points || [0, 0, shapeData.width, 0]; // Default horizontal line
     shapeData.stroke = properties.stroke || color;
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
+    shapeData.scaleX = 1; // Lines should always have scale = 1, transformations baked into points
+    shapeData.scaleY = 1;
     delete shapeData.fill; // Lines don't have fill
   } else if (normalizedType === SHAPE_TYPES.STAR) {
     shapeData.stroke = properties.stroke || '#333333';

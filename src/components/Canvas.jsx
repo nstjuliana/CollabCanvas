@@ -256,6 +256,7 @@ function Canvas() {
 
       // Delete or Backspace key - delete selected shapes
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeIds.length > 0) {
+        selectShape(null);
         // Filter out shapes locked by others
         const shapesToDelete = selectedShapeIds.filter(id => !isLockedByOther(id));
         

@@ -39,7 +39,7 @@ function ColorPicker({ selectedColor, onColorChange, disabled = false }) {
       <input
         ref={colorInputRef}
         type="color"
-        value={selectedColor}
+        value={selectedColor || '#000000'}
         onChange={handleColorChange}
         className="color-input-hidden"
       />

@@ -33,7 +33,8 @@ export const SHAPE_TYPES = {
   CIRCLE: 'circle',
   TEXT: 'text',
   IMAGE: 'image',
-  // Future: Add more shape types as needed
+  LINE: 'line',
+  STAR: 'star',
 };
 
 // Default shape type for MVP
@@ -44,6 +45,8 @@ export const TOOL_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
   TEXT: 'text',
+  LINE: 'line',
+  STAR: 'star',
   DELETE: 'delete',
 };
 

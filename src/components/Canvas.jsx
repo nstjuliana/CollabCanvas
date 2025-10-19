@@ -533,11 +533,19 @@ function Canvas() {
         // For circles, x/y is the center point, so use canvasPos directly
         x = canvasPos.x;
         y = canvasPos.y;
+      } else if (selectedTool === TOOL_TYPES.STAR) {
+        // For stars, x/y is the center point, so use canvasPos directly
+        x = canvasPos.x;
+        y = canvasPos.y;
       } else if (selectedTool === TOOL_TYPES.TEXT) {
         // For text, x/y is the top-left corner
         x = canvasPos.x;
         y = canvasPos.y;
         properties.text = text;
+      } else if (selectedTool === TOOL_TYPES.LINE) {
+        // For lines, x/y is the start point, offset to center the line on cursor
+        x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
+        y = canvasPos.y;
       } else {
         // For rectangles, x/y is top-left corner, so offset by half width/height to center on cursor
         x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
@@ -682,10 +690,9 @@ function Canvas() {
       // Clean up stored position
       delete shapeDragStartPosition.current[shape.id];
     } else {
-      // Update color picker to dragged shape's color
-      if (shape.fill) {
-        setSelectedColor(shape.fill);
-      }
+      // Update color picker to dragged shape's color (fallback to stroke for lines)
+      const shapeColor = shape.fill || shape.stroke || DEFAULT_SHAPE_COLOR;
+      setSelectedColor(shapeColor);
     }
   };
 
@@ -750,8 +757,9 @@ function Canvas() {
         return;
       }
       
-      // Update color picker to clicked shape's color
-      setSelectedColor(shape.fill);
+      // Update color picker to clicked shape's color (fallback to stroke for lines)
+      const shapeColor = shape.fill || shape.stroke || DEFAULT_SHAPE_COLOR;
+      setSelectedColor(shapeColor);
       
       // Handle multi-select with Ctrl/Cmd key
       if (isCtrlPressed) {
@@ -978,10 +986,11 @@ function Canvas() {
         selectShapes(selectableShapes, false);
       }
       
-      // Update color picker to first selected shape's color
+      // Update color picker to first selected shape's color (fallback to stroke for lines)
       const firstShape = shapes.find(s => s.id === selectableShapes[0]);
-      if (firstShape && firstShape.fill) {
-        setSelectedColor(firstShape.fill);
+      if (firstShape) {
+        const shapeColor = firstShape.fill || firstShape.stroke || DEFAULT_SHAPE_COLOR;
+        setSelectedColor(shapeColor);
       }
     }
   };

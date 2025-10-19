@@ -1,0 +1,147 @@
+/* Keyboard Shortcuts Container */
+.keyboard-shortcuts-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+/* Shortcuts Dropdown */
+.shortcuts-dropdown {
+  position: absolute;
+  left: 42px;
+  top: -4px;
+  min-width: 280px;
+  background: white;
+  border-radius: 8px;
+  padding: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  animation: slideInLeft 0.2s ease-out;
+  overflow: hidden;
+}
+
+/* Invisible bridge to prevent gap issues */
+.shortcuts-dropdown::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 0;
+  width: 10px;
+  height: 100%;
+  background: transparent;
+}
+
+/* Header */
+.shortcuts-header {
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* Shortcuts List */
+.shortcuts-list {
+  padding: 0.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.shortcut-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem 0.5rem;
+  gap: 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.shortcut-item:last-child {
+  border-bottom: none;
+}
+
+.shortcut-key {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #667eea;
+  background: #f5f5f5;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.shortcut-action {
+  font-size: 0.85rem;
+  color: #666;
+  text-align: right;
+  flex: 1;
+}
+
+/* Animation */
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .shortcuts-dropdown {
+    background: #2a2a2a;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+
+  .shortcuts-header {
+    border-bottom-color: #444;
+  }
+
+  .shortcut-item {
+    border-bottom-color: #333;
+  }
+
+  .shortcut-key {
+    color: #85a5ff;
+    background: #1a1a1a;
+  }
+
+  .shortcut-action {
+    color: #999;
+  }
+}
+
+/* Scrollbar styling for shortcuts list */
+.shortcuts-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.shortcuts-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.shortcuts-list::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.shortcuts-list::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+@media (prefers-color-scheme: dark) {
+  .shortcuts-list::-webkit-scrollbar-thumb {
+    background: #444;
+  }
+
+  .shortcuts-list::-webkit-scrollbar-thumb:hover {
+    background: #555;
+  }
+}
+

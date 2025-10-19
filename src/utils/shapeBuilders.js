@@ -26,6 +26,12 @@ export function normalizeShapeType(type) {
   if (normalized === 'image' || normalized === 'img' || normalized === 'picture') {
     return SHAPE_TYPES.IMAGE;
   }
+  if (normalized === 'line') {
+    return SHAPE_TYPES.LINE;
+  }
+  if (normalized === 'star') {
+    return SHAPE_TYPES.STAR;
+  }
   
   return SHAPE_TYPES.RECTANGLE; // Default
 }
@@ -192,6 +198,18 @@ export function buildShapeObject(type, x, y, properties = {}) {
   } else if (normalizedType === SHAPE_TYPES.CIRCLE) {
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
+  } else if (normalizedType === SHAPE_TYPES.LINE) {
+    // Line uses points array [x1, y1, x2, y2] relative to shape position
+    shapeData.points = properties.points || [0, 0, shapeData.width, 0]; // Default horizontal line
+    shapeData.stroke = properties.stroke || color;
+    shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
+    delete shapeData.fill; // Lines don't have fill
+  } else if (normalizedType === SHAPE_TYPES.STAR) {
+    shapeData.stroke = properties.stroke || '#333333';
+    shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
+    shapeData.numPoints = properties.numPoints || 5;
+    shapeData.innerRadius = properties.innerRadius || (Math.min(shapeData.width, shapeData.height) / 2) * 0.5;
+    shapeData.outerRadius = properties.outerRadius || Math.min(shapeData.width, shapeData.height) / 2;
   }
   
   return shapeData;

@@ -65,6 +65,22 @@ export async function createShape(shapeData) {
       shape.imageUrl = shapeData.imageUrl;
       shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
       shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+    } else if (shapeData.type === SHAPE_TYPES.LINE) {
+      // Line-specific properties
+      shape.points = shapeData.points || [0, 0, SHAPE_DEFAULTS.WIDTH, 0];
+      shape.stroke = shapeData.stroke || shape.fill || '#333333';
+      shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
+      // Lines don't use fill, width, or height in the traditional sense
+      delete shape.fill;
+    } else if (shapeData.type === SHAPE_TYPES.STAR) {
+      // Star-specific properties
+      shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+      shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+      shape.numPoints = shapeData.numPoints || 5;
+      shape.innerRadius = shapeData.innerRadius || (Math.min(shape.width, shape.height) / 2) * 0.5;
+      shape.outerRadius = shapeData.outerRadius || Math.min(shape.width, shape.height) / 2;
+      shape.stroke = shapeData.stroke || '#333333';
+      shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
     } else {
       // Shape-specific properties (rectangle, circle)
       shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;

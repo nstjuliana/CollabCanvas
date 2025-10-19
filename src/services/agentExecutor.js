@@ -25,7 +25,7 @@ export const AGENT_TOOLS_LEGACY = [
           properties: {
             type: {
               type: 'string',
-              enum: ['rectangle', 'circle', 'text', 'image', 'square'],
+              enum: ['rectangle', 'circle', 'text', 'image', 'square', 'line', 'star'],
               description: 'Shape type to filter by',
             },
             color: {
@@ -56,7 +56,7 @@ export const AGENT_TOOLS_LEGACY = [
       properties: {
         type: {
           type: 'string',
-          enum: ['rectangle', 'circle', 'text', 'square'],
+          enum: ['rectangle', 'circle', 'text', 'square', 'line', 'star'],
           description: 'Type of shape to create',
         },
         x: {
@@ -108,7 +108,7 @@ export const AGENT_TOOLS_LEGACY = [
       properties: {
         type: {
           type: 'string',
-          enum: ['rectangle', 'circle', 'square'],
+          enum: ['rectangle', 'circle', 'square', 'line', 'star'],
           description: 'Type of shapes to create',
         },
         rows: {
@@ -392,7 +392,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
         description: 'Find shapes on the canvas. Returns an array of shape objects, each with an "id" field that you MUST use in subsequent operations. Example return: [{id: "abc123", type: "circle", x: 100, y: 200, fill: "red"}]',
         inputSchema: z.object({
           criteria: z.object({
-            type: z.enum(['rectangle', 'circle', 'text', 'image', 'square']).optional().describe('Shape type to filter by'),
+            type: z.enum(['rectangle', 'circle', 'text', 'image', 'square', 'line', 'star']).optional().describe('Shape type to filter by'),
             color: z.string().optional().describe('Color to filter by. Supports: red, orange, yellow, green, cyan, aqua, blue, purple, violet, pink, brown, gray, black, white, magenta, fuchsia, teal, olive, gold, beige, tan, maroon, burgundy, lavender, lilac, turquoise, or hex codes. Uses RGB range matching to find all shades of a color.'),
             position: z.enum(['leftmost', 'rightmost', 'topmost', 'bottommost', 'left', 'right', 'top', 'bottom']).optional().describe('Find shape in specific relative position'),
             text: z.string().optional().describe('Text content to search for (only for text shapes)'),
@@ -417,7 +417,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       createShape: tool({
         description: 'Create a single shape on the canvas',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to create'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to create'),
           x: z.number().describe('X position on canvas (0 is left)'),
           y: z.number().describe('Y position on canvas (0 is top)'),
           properties: z.object({
@@ -493,7 +493,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       moveOneShapeByType: tool({
         description: 'Find and move ONE shape of a specific type. Use this when user says "a square", "any circle", etc. (singular).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to move'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to move'),
           deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
           deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
           color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
@@ -515,7 +515,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       moveShapesByType: tool({
         description: 'Find and move ALL shapes of a specific type. Use this when user says "all squares", "the circles", etc. (plural).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to move'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to move'),
           deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
           deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
           color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
@@ -536,7 +536,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       changeOneShapeColorByType: tool({
         description: 'Find and change color of ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to recolor'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to recolor'),
           newColor: z.string().describe('New color to apply'),
           currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
         }),
@@ -555,7 +555,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       changeColorByType: tool({
         description: 'Find and change color of ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to recolor'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to recolor'),
           newColor: z.string().describe('New color to apply'),
           currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
         }),
@@ -575,7 +575,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       deleteOneShapeByType: tool({
         description: 'Find and delete ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to delete'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to delete'),
           color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
         }),
         execute: async ({ type, color }) => {
@@ -593,7 +593,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
       deleteShapesByType: tool({
         description: 'Find and delete ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to delete'),
+          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to delete'),
           color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
         }),
         execute: async ({ type, color }) => {
@@ -619,6 +619,15 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
           role: 'system',
           content: `You are an AI assistant that helps users manipulate shapes on a canvas. 
 
+AVAILABLE SHAPE TYPES:
+You can work with these shape types: rectangle, square, circle, text, line, star, image
+- "rectangle" and "square" are the same type (both are rectangles)
+- "line" = line shapes (straight lines)
+- "star" = star shapes (multi-pointed stars)
+- "circle" = circular shapes
+- "text" = text labels
+- "image" = image shapes
+
 CANVAS INFORMATION:
 - Canvas size: 5000 x 5000 pixels
 - Origin: Top-left corner is (0, 0)
@@ -642,11 +651,14 @@ SINGULAR (a, any, one) → Use "One" tools:
 - "Move A square" → moveOneShapeByType
 - "Move ANY square" → moveOneShapeByType  
 - "Delete A circle" → deleteOneShapeByType
+- "Delete a red line" → deleteOneShapeByType
 
 PLURAL (all, the, multiple) → Use plural "ByType" tools:
 - "Move ALL squares" → moveShapesByType
 - "Move THE squares" → moveShapesByType
 - "Delete circles" → deleteShapesByType
+- "Delete all red lines" → deleteShapesByType
+- "Delete the stars" → deleteShapesByType
 
 MOVEMENT:
 - Relative: "left" = negative X, "right" = positive X, "up" = negative Y, "down" = positive Y
@@ -659,6 +671,12 @@ User: "Move the blue square to the middle"
 
 User: "Move any square 340px to the left"
 ✓ Call: moveOneShapeByType({type: "square", deltaX: -340, deltaY: 0})
+
+User: "Delete all red lines"
+✓ Call: deleteShapesByType({type: "line", color: "red"})
+
+User: "Change the green star to blue"
+✓ Call: changeOneShapeColorByType({type: "star", newColor: "blue", currentColor: "green"})
 
 NEVER use findShapes alone - it doesn't do anything!
 After executing, confirm what you did.`,

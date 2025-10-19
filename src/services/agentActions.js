@@ -50,16 +50,18 @@ export function findShapes(shapes, criteria = {}) {
   // Filter by color using RGB range matching
   if (criteria.color) {
     results = results.filter(s => {
-      if (!s.fill) return false;
+      // Lines use 'stroke' for color, other shapes use 'fill'
+      const shapeColor = s.fill || s.stroke;
+      if (!shapeColor) return false;
       
       // Try RGB range matching first (supports "red", "dark red", "crimson", etc.)
-      if (matchesColorRange(s.fill, criteria.color)) {
+      if (matchesColorRange(shapeColor, criteria.color)) {
         return true;
       }
       
       // Fallback to exact hex match
       const normalizedColor = normalizeColor(criteria.color);
-      return s.fill.toLowerCase() === normalizedColor.toLowerCase();
+      return shapeColor.toLowerCase() === normalizedColor.toLowerCase();
     });
   }
   
@@ -210,7 +212,14 @@ export async function moveMultipleShapesBy(shapeIds, deltaX, deltaY) {
  */
 export async function changeShapeColor(shapeId, color) {
   const normalizedColor = normalizeColor(color);
-  await updateShapeService(shapeId, { fill: normalizedColor });
+  const shape = await getShape(shapeId);
+  
+  // Lines use 'stroke' for color, other shapes use 'fill'
+  if (shape && shape.type === SHAPE_TYPES.LINE) {
+    await updateShapeService(shapeId, { stroke: normalizedColor });
+  } else {
+    await updateShapeService(shapeId, { fill: normalizedColor });
+  }
 }
 
 /**
@@ -221,9 +230,15 @@ export async function changeShapeColor(shapeId, color) {
  */
 export async function changeMultipleShapesColor(shapeIds, color) {
   const normalizedColor = normalizeColor(color);
-  const promises = shapeIds.map(id => 
-    updateShapeService(id, { fill: normalizedColor })
-  );
+  const promises = shapeIds.map(async (id) => {
+    const shape = await getShape(id);
+    // Lines use 'stroke' for color, other shapes use 'fill'
+    if (shape && shape.type === SHAPE_TYPES.LINE) {
+      return updateShapeService(id, { stroke: normalizedColor });
+    } else {
+      return updateShapeService(id, { fill: normalizedColor });
+    }
+  });
   await Promise.all(promises);
 }
 

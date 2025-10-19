@@ -22,7 +22,7 @@ const shapes = getAllShapes();
 Find shapes matching specific criteria.
 
 **Parameters:**
-- `criteria.type` - Shape type: "rectangle", "circle", "text", "image"
+- `criteria.type` - Shape type: "rectangle", "circle", "text", "image", "line", "star"
 - `criteria.color` - Color (hex or name): "red", "#FF6B6B"
 - `criteria.position` - Relative position: "leftmost", "rightmost", "topmost", "bottommost"
 - `criteria.text` - Text content (for text shapes)
@@ -57,7 +57,7 @@ const shape = await getShapeInfo('shape-id-123');
 Create a single shape.
 
 **Parameters:**
-- `type` - "rectangle", "circle", "text", or "image"
+- `type` - "rectangle", "circle", "text", "image", "line", or "star"
 - `x` - X position on canvas
 - `y` - Y position on canvas
 - `properties` (optional):
@@ -225,7 +225,7 @@ const tools = [
         criteria: {
           type: "object",
           properties: {
-            type: { type: "string", enum: ["rectangle", "circle", "text", "image"] },
+            type: { type: "string", enum: ["rectangle", "circle", "text", "image", "line", "star"] },
             color: { type: "string", description: "Color name or hex code" },
             position: { type: "string", enum: ["leftmost", "rightmost", "topmost", "bottommost"] },
             text: { type: "string", description: "Text content to search for" }

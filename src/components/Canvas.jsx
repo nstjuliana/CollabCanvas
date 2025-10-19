@@ -79,6 +79,9 @@ function Canvas() {
   const shapeRefs = useRef({});
   const isDraggingShapeRef = useRef(false);
   
+  // Track ID mappings for undo/redo (oldId -> currentId)
+  const undoRedoIdMap = useRef({});
+  
   // Track touch events for double-tap detection on mobile
   const lastTapRef = useRef(0);
   const tapTimeoutRef = useRef(null);
@@ -364,13 +367,27 @@ function Canvas() {
     
     try {
       const action = undoHistory();
-      if (!action) return;
+      if (!action) {
+        endUndoRedo();
+        return;
+      }
 
       switch (action.type) {
         case ACTION_TYPES.CREATE: {
           // Undo create by deleting the shape
-          const { shapeId } = action.data;
-          await deleteShape(shapeId);
+          let { shapeId } = action.data;
+          // Use mapped ID if available
+          const currentId = undoRedoIdMap.current[shapeId] || shapeId;
+          const shape = shapes.find(s => s.id === currentId);
+          
+          if (shape) {
+            await deleteShape(currentId);
+            // Store the full shape data for redo (without ID/locks)
+            const { id, lockedBy, lockedAt, ...shapeData } = shape;
+            if (!action.data.shapeData) {
+              action.data.shapeData = shapeData;
+            }
+          }
           break;
         }
 
@@ -380,30 +397,36 @@ function Canvas() {
           // Remove id and locks to create fresh shape
           const { id, lockedBy, lockedAt, ...shapeData } = shape;
           const newShapeId = await createShape(shapeData);
-          // Update the action data with new ID for potential redo
-          action.data.shapeId = newShapeId;
+          // Map old ID to new ID
+          undoRedoIdMap.current[id] = newShapeId;
           break;
         }
 
         case ACTION_TYPES.DELETE_MULTIPLE: {
           // Undo multiple deletes by recreating all shapes
           const { shapes: deletedShapes } = action.data;
-          const newShapeIds = [];
           for (const shape of deletedShapes) {
             const { id, lockedBy, lockedAt, ...shapeData } = shape;
             const newShapeId = await createShape(shapeData);
-            newShapeIds.push(newShapeId);
+            // Map old ID to new ID
+            undoRedoIdMap.current[id] = newShapeId;
           }
-          // Update the action data with new IDs for potential redo
-          action.data.shapeIds = newShapeIds;
           break;
         }
 
         case ACTION_TYPES.UPDATE: {
           // Undo update by restoring previous state
           const { previousStates } = action.data;
+          // Use mapped IDs and filter to only shapes that still exist
+          const validUpdates = previousStates
+            .map(({ id, updates }) => ({
+              id: undoRedoIdMap.current[id] || id,
+              updates
+            }))
+            .filter(({ id }) => shapes.find(s => s.id === id));
+          
           await Promise.all(
-            previousStates.map(({ id, updates }) => updateShape(id, updates))
+            validUpdates.map(({ id, updates }) => updateShape(id, updates))
           );
           break;
         }
@@ -411,6 +434,8 @@ function Canvas() {
         default:
           break;
       }
+    } catch (err) {
+      console.error('Undo error:', err);
     } finally {
       endUndoRedo();
     }
@@ -426,32 +451,44 @@ function Canvas() {
     
     try {
       const action = redoHistory();
-      if (!action) return;
+      if (!action) {
+        endUndoRedo();
+        return;
+      }
 
       switch (action.type) {
         case ACTION_TYPES.CREATE: {
           // Redo create by creating the shape again
-          const { shapeData } = action.data;
-          const shapeId = await createShape(shapeData);
-          // Update the action data with new ID
-          action.data.shapeId = shapeId;
+          const { shapeData, shapeId: originalId } = action.data;
+          if (shapeData) {
+            const newShapeId = await createShape(shapeData);
+            // Map original ID to new ID
+            undoRedoIdMap.current[originalId] = newShapeId;
+          }
           break;
         }
 
         case ACTION_TYPES.DELETE: {
-          // Redo delete by deleting the shape again
-          const { shapeId } = action.data;
-          if (shapeId) {
-            await deleteShape(shapeId);
+          // Redo delete by deleting the recreated shape
+          const { shape } = action.data;
+          const originalId = shape.id;
+          const currentId = undoRedoIdMap.current[originalId] || originalId;
+          
+          if (shapes.find(s => s.id === currentId)) {
+            await deleteShape(currentId);
           }
           break;
         }
 
         case ACTION_TYPES.DELETE_MULTIPLE: {
-          // Redo multiple deletes by deleting all shapes again
-          const { shapeIds } = action.data;
-          if (shapeIds && shapeIds.length > 0) {
-            await deleteMultipleShapes(shapeIds);
+          // Redo multiple deletes by deleting the recreated shapes
+          const { shapes: deletedShapes } = action.data;
+          const idsToDelete = deletedShapes
+            .map(shape => undoRedoIdMap.current[shape.id] || shape.id)
+            .filter(id => shapes.find(s => s.id === id));
+          
+          if (idsToDelete.length > 0) {
+            await deleteMultipleShapes(idsToDelete);
           }
           break;
         }
@@ -459,8 +496,16 @@ function Canvas() {
         case ACTION_TYPES.UPDATE: {
           // Redo update by applying new state
           const { newStates } = action.data;
+          // Use mapped IDs and filter to only shapes that still exist
+          const validUpdates = newStates
+            .map(({ id, updates }) => ({
+              id: undoRedoIdMap.current[id] || id,
+              updates
+            }))
+            .filter(({ id }) => shapes.find(s => s.id === id));
+          
           await Promise.all(
-            newStates.map(({ id, updates }) => updateShape(id, updates))
+            validUpdates.map(({ id, updates }) => updateShape(id, updates))
           );
           break;
         }
@@ -468,6 +513,8 @@ function Canvas() {
         default:
           break;
       }
+    } catch (err) {
+      console.error('Redo error:', err);
     } finally {
       endUndoRedo();
     }

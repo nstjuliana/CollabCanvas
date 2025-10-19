@@ -1,0 +1,165 @@
+import { useEffect } from 'react';
+import { ACTION_TYPES } from './useUndoRedo';
+
+/**
+ * Custom hook for handling keyboard shortcuts in the canvas
+ * Handles undo/redo, delete, escape, and arrow key nudging
+ */
+const useKeyboardShortcuts = ({
+  selectedShapeIds,
+  shapes,
+  isLockedByOther,
+  deleteShape,
+  deleteMultipleShapes,
+  selectShape,
+  updateShape,
+  addToHistory,
+  handleUndo,
+  handleRedo
+}) => {
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      // Don't handle if user is typing in an input field
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      // Ctrl+Z or Cmd+Z - Undo
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        await handleUndo();
+        return;
+      }
+
+      // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z or Cmd+Shift+Z - Redo
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        await handleRedo();
+        return;
+      }
+
+      // Escape key - deselect all shapes
+      if (e.key === 'Escape' && selectedShapeIds.length > 0) {
+        selectShape(null);
+        return;
+      }
+
+      // Delete or Backspace key - delete selected shapes
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeIds.length > 0) {
+        selectShape(null);
+        // Filter out shapes locked by others
+        const shapesToDelete = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToDelete.length === 0) {
+          return;
+        }
+
+        // Store shapes for undo before deleting
+        const deletedShapes = shapesToDelete.map(id => shapes.find(s => s.id === id)).filter(Boolean);
+
+        try {
+          if (shapesToDelete.length === 1) {
+            await deleteShape(shapesToDelete[0]);
+            // Add to history
+            addToHistory({
+              type: ACTION_TYPES.DELETE,
+              data: { shape: deletedShapes[0] }
+            });
+          } else {
+            await deleteMultipleShapes(shapesToDelete);
+            // Add to history
+            addToHistory({
+              type: ACTION_TYPES.DELETE_MULTIPLE,
+              data: { shapes: deletedShapes }
+            });
+          }
+        } catch (err) {
+          console.error('Error deleting shapes:', err);
+        }
+      }
+
+      // Arrow keys - nudge selected shapes by 1 pixel
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedShapeIds.length > 0) {
+        e.preventDefault(); // Prevent page scrolling
+
+        // Filter out shapes locked by others
+        const shapesToMove = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToMove.length === 0) {
+          return;
+        }
+
+        // Calculate offset based on arrow key
+        let offsetX = 0;
+        let offsetY = 0;
+
+        switch (e.key) {
+          case 'ArrowUp':
+            offsetY = -1;
+            break;
+          case 'ArrowDown':
+            offsetY = 1;
+            break;
+          case 'ArrowLeft':
+            offsetX = -1;
+            break;
+          case 'ArrowRight':
+            offsetX = 1;
+            break;
+        }
+
+        // Store previous positions for undo
+        const previousStates = shapesToMove.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, x: shape.x, y: shape.y } : null;
+        }).filter(Boolean);
+
+        // Update all selected shapes
+        try {
+          await Promise.all(
+            shapesToMove.map(id => {
+              const shape = shapes.find(s => s.id === id);
+              if (shape) {
+                return updateShape(id, {
+                  x: shape.x + offsetX,
+                  y: shape.y + offsetY
+                });
+              }
+            })
+          );
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToMove,
+              previousStates: previousStates.map(s => ({ id: s.id, updates: { x: s.x, y: s.y } })),
+              newStates: previousStates.map(s => ({
+                id: s.id,
+                updates: { x: s.x + offsetX, y: s.y + offsetY }
+              }))
+            }
+          });
+        } catch (err) {
+          console.error('Error moving shapes:', err);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    selectedShapeIds,
+    shapes,
+    isLockedByOther,
+    deleteShape,
+    deleteMultipleShapes,
+    selectShape,
+    updateShape,
+    addToHistory,
+    handleUndo,
+    handleRedo
+  ]);
+};
+
+export default useKeyboardShortcuts;

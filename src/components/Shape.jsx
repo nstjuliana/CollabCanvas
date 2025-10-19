@@ -240,8 +240,8 @@ function Shape({
     // Hovering/preview images: use fixed stroke width regardless of zoom or image scale
     finalStrokeWidth = 4;
   } else if (showHoverEffect) {
-    // Hovering/preview shapes: slightly thicker stroke to indicate interactivity
-    finalStrokeWidth = strokeWidth + 19.5;
+    // Hovering/preview shapes: subtle stroke to indicate interactivity
+    finalStrokeWidth = strokeWidth + 1;
   } else {
     // Regular shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth;

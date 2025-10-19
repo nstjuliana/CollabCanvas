@@ -108,7 +108,7 @@ function Canvas() {
   // Text editing state
   const [isEditingText, setIsEditingText] = useState(false);
   const [editingTextPosition, setEditingTextPosition] = useState({ x: 0, y: 0 });
-  const [editingTextCanvasPosition, setEditingTextCanvasPosition] = useState({ x: 0, y: 0 }); // Canvas coordinates
+  const [editingTextCanvasPosition, setEditingTextCanvasPosition] = useState({ x: 0, y: 0 }); // Canvas coordinates for new text creation
   const [editingTextValue, setEditingTextValue] = useState('');
   const [editingShapeId, setEditingShapeId] = useState(null);
   const [editingTextTransform, setEditingTextTransform] = useState({ 
@@ -400,18 +400,24 @@ function Canvas() {
           const newShapeId = await createShape(shapeData);
           // Map old ID to new ID
           undoRedoIdMap.current[id] = newShapeId;
+          // Auto-select the restored shape
+          selectShape(newShapeId);
           break;
         }
 
         case ACTION_TYPES.DELETE_MULTIPLE: {
           // Undo multiple deletes by recreating all shapes
           const { shapes: deletedShapes } = action.data;
+          const newShapeIds = [];
           for (const shape of deletedShapes) {
             const { id, lockedBy, lockedAt, ...shapeData } = shape;
             const newShapeId = await createShape(shapeData);
             // Map old ID to new ID
             undoRedoIdMap.current[id] = newShapeId;
+            newShapeIds.push(newShapeId);
           }
+          // Auto-select all restored shapes
+          selectShapes(newShapeIds);
           break;
         }
 
@@ -465,6 +471,8 @@ function Canvas() {
             const newShapeId = await createShape(shapeData);
             // Map original ID to new ID
             undoRedoIdMap.current[originalId] = newShapeId;
+            // Auto-select the recreated shape
+            selectShape(newShapeId);
           }
           break;
         }
@@ -556,13 +564,16 @@ function Canvas() {
       // Use shared shape builder - ONE source of truth!
       const newShape = buildShapeObject(selectedTool, x, y, properties);
       const shapeId = await createShape(newShape);
-      
+
       // Add to history
       addToHistory({
         type: ACTION_TYPES.CREATE,
         data: { shapeId, shapeData: newShape }
       });
-      
+
+      // Automatically select the newly created shape
+      selectShape(shapeId);
+
       return shapeId;
     } catch (err) {
       return null;
@@ -588,7 +599,7 @@ function Canvas() {
   };
 
   /**
-   * Handle double-click on canvas to create a new shape
+   * Handle double-click on canvas to create a new shape or start text editing
    */
   const handleCanvasDoubleClick = async (e) => {
     // Don't create shapes when delete tool is active
@@ -605,7 +616,13 @@ function Canvas() {
     const stage = stageRef.current;
     const pointerPosition = stage.getPointerPosition();
     const canvasPos = screenToCanvas(stage, pointerPosition);
-    
+
+    // If text tool is selected, start text editing instead of creating shape
+    if (selectedTool === TOOL_TYPES.TEXT) {
+      startTextEditing(canvasPos.x, canvasPos.y);
+      return;
+    }
+
     await createShapeAtPosition(canvasPos);
   };
 
@@ -632,12 +649,17 @@ function Canvas() {
       const stage = stageRef.current;
       const pointerPosition = stage.getPointerPosition();
       const canvasPos = screenToCanvas(stage, pointerPosition);
-      
-      await createShapeAtPosition(canvasPos);
-      
+
+      // If text tool is selected, start text editing instead of creating shape
+      if (selectedTool === TOOL_TYPES.TEXT) {
+        startTextEditing(canvasPos.x, canvasPos.y);
+      } else {
+        await createShapeAtPosition(canvasPos);
+      }
+
       // Reset to prevent triple-tap from creating another shape
       lastTapRef.current = 0;
-      
+
       // Clear any pending timeout
       if (tapTimeoutRef.current) {
         clearTimeout(tapTimeoutRef.current);
@@ -646,7 +668,7 @@ function Canvas() {
     } else {
       // First tap - record the time
       lastTapRef.current = now;
-      
+
       // Clear after 300ms to reset double-tap detection
       if (tapTimeoutRef.current) {
         clearTimeout(tapTimeoutRef.current);
@@ -839,23 +861,12 @@ function Canvas() {
   };
 
   /**
-   * Handle canvas click for text tool or deselecting shapes
+   * Handle canvas click for deselecting shapes
    */
   const handleCanvasClick = async (e) => {
     // Check if we clicked on a user-created shape
     const clickedOnShape = isClickOnShape(e);
-    
-    // If text tool is selected and we didn't click on a shape, start text editing
-    if (selectedTool === TOOL_TYPES.TEXT && !clickedOnShape) {
-      const stage = stageRef.current;
-      const pointerPosition = stage.getPointerPosition();
-      const canvasPos = screenToCanvas(stage, pointerPosition);
-      
-      // Start text editing at click position
-      startTextEditing(canvasPos.x, canvasPos.y);
-      return;
-    }
-    
+
     // If we didn't click on a shape and have a selection, deselect it (unless Ctrl is pressed)
     if (!clickedOnShape && selectedShapeIds.length > 0 && !isCtrlPressed) {
       selectShape(null);
@@ -891,7 +902,7 @@ function Canvas() {
   const isShapeInBox = (shape, x1, y1, x2, y2) => {
     // Get shape bounds
     let shapeX1, shapeY1, shapeX2, shapeY2;
-    
+
     if (shape.type === SHAPE_TYPES.CIRCLE) {
       // For circles, x/y is center
       const radius = Math.max(shape.width, shape.height) / 2;
@@ -905,6 +916,33 @@ function Canvas() {
       shapeY1 = shape.y;
       shapeX2 = shape.x + 100; // Approximate
       shapeY2 = shape.y + (shape.fontSize || 24);
+    } else if (shape.type === SHAPE_TYPES.LINE) {
+      // For lines, calculate bounds from points array
+      const points = shape.points || [0, 0, 100, 0];
+
+      // Extract all x and y coordinates from points array
+      const coords = [];
+      for (let i = 0; i < points.length; i += 2) {
+        coords.push({
+          x: shape.x + points[i],
+          y: shape.y + points[i + 1]
+        });
+      }
+
+      // Find min/max coordinates
+      const minX = Math.min(...coords.map(c => c.x));
+      const maxX = Math.max(...coords.map(c => c.x));
+      const minY = Math.min(...coords.map(c => c.y));
+      const maxY = Math.max(...coords.map(c => c.y));
+
+      // Account for stroke width (lines have thickness)
+      const strokeWidth = shape.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2; // Default line stroke width is 4px
+      const halfStroke = strokeWidth / 2;
+
+      shapeX1 = minX - halfStroke;
+      shapeY1 = minY - halfStroke;
+      shapeX2 = maxX + halfStroke;
+      shapeY2 = maxY + halfStroke;
     } else {
       // For rectangles and images, x/y is top-left
       shapeX1 = shape.x;
@@ -1002,7 +1040,7 @@ function Canvas() {
   const startTextEditing = (x, y, existingShape = null) => {
     const stage = stageRef.current;
     if (!stage) return;
-    
+
     // Get the actual text node to measure dimensions
     let textWidth = 100;
     let textHeight = 32;
@@ -1017,18 +1055,18 @@ function Canvas() {
         }
       }
     }
-    
+
     // Get current stage transform directly from the stage (most up-to-date)
     const currentScale = stage.scaleX();
     const currentPosition = stage.position();
-    
-    // Store canvas coordinates (not screen coordinates)
+
+    // Store canvas coordinates for new text creation
     setEditingTextCanvasPosition({ x, y });
-    
+
     // Convert canvas position to screen position for textarea
     const screenX = x * currentScale + currentPosition.x;
     const screenY = y * currentScale + currentPosition.y;
-    
+
     // Capture transformation properties for inline editing
     const transform = {
       fontSize: existingShape?.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE,
@@ -1038,13 +1076,13 @@ function Canvas() {
       width: textWidth,
       height: textHeight,
     };
-    
+
     setEditingTextPosition({ x: screenX, y: screenY });
     setEditingTextValue(existingShape?.text || '');
     setEditingShapeId(existingShape?.id || null);
     setEditingTextTransform(transform);
     setIsEditingText(true);
-    
+
     // Focus textarea after state update
     setTimeout(() => {
       if (textareaRef.current) {
@@ -1087,15 +1125,8 @@ function Canvas() {
         } catch (err) {
         }
       } else {
-        // Create new text shape at the clicked position
-        const stage = stageRef.current;
-        if (stage) {
-          // Convert screen position back to canvas position
-          const canvasX = (editingTextPosition.x - stagePosition.x) / stageScale;
-          const canvasY = (editingTextPosition.y - stagePosition.y) / stageScale;
-          
-          await createShapeAtPosition({ x: canvasX, y: canvasY }, text);
-        }
+        // Create new text shape at the stored canvas position
+        await createShapeAtPosition(editingTextCanvasPosition, text);
       }
     } else if (editingShapeId) {
       // If text is empty and we're editing an existing shape, delete it
@@ -1266,12 +1297,15 @@ function Canvas() {
         };
 
         const shapeId = await createShape(newShape);
-        
+
         // Add to history
         addToHistory({
           type: ACTION_TYPES.CREATE,
           data: { shapeId, shapeData: newShape }
         });
+
+        // Automatically select the newly created image shape
+        selectShape(shapeId);
       } catch (err) {
         alert(`Failed to upload ${file.name}: ${err.message}`);
       } finally {

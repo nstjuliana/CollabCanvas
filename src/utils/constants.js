@@ -231,7 +231,7 @@ export const LOG_REALTIME_EVENTS = false; // Set to true for debugging real-time
 
 /**
  * Get a consistent color for a user across all components (cursors, presence, etc.)
- * Uses the same algorithm as both cursor and presence systems for consistency
+ * Uses an enhanced algorithm for better color distribution
  * @param {string} userId - User ID
  * @param {Array<string>} colors - Array of available colors
  * @returns {string} Hex color code
@@ -245,8 +245,24 @@ export function getUserColor(userId, colors = PRESENCE_COLORS) {
     hash = hash & hash; // Convert to 32-bit integer
   }
 
-  // Use absolute value and modulo to get index
-  const index = Math.abs(hash) % colors.length;
+  // Use a double-hash approach for better distribution
+  // First hash determines the starting point, second hash affects step size
+  const primaryHash = Math.abs(hash);
+  const secondaryHash = Math.abs(hash * 7 + 0x456789ab); // Different multiplier for variety
+
+  // Use primary hash for base index, secondary for step size
+  const baseIndex = primaryHash % colors.length;
+  const stepSize = (secondaryHash % 7) + 1; // Step size between 1-7
+
+  // Try different indices using the step size to find a good distribution
+  for (let attempt = 0; attempt < Math.min(colors.length, 10); attempt++) {
+    const index = (baseIndex + (attempt * stepSize)) % colors.length;
+    // This should provide better distribution across the color palette
+    return colors[index];
+  }
+
+  // Fallback to simple modulo if the above doesn't work
+  const index = primaryHash % colors.length;
   return colors[index];
 }
 

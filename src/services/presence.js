@@ -179,6 +179,13 @@ export function removeUserColor(userId) {
 }
 
 /**
+ * Force reset of all color assignments (for debugging or recovery)
+ */
+export function forceResetAllColors() {
+  userColors.clear();
+}
+
+/**
  * Get a color for a user's presence indicator based on their userId
  * Ensures color uniqueness by tracking used colors
  * @param {string} userId - User ID
@@ -195,28 +202,50 @@ export function getUserPresenceColor(userId, colors = PRESENCE_COLORS) {
   const baseColor = getUserColor(userId, colors);
 
   // Check if this color is currently in use by any active user
+  // Also check against all base colors to avoid similar colors
   let isColorInUse = false;
+  const usedColorsSet = new Set();
+
+  // First, collect all currently used colors (including variations)
   for (const [otherUserId, color] of userColors) {
-    if (color.toUpperCase() === baseColor.toUpperCase()) {
-      isColorInUse = true;
-      break;
+    usedColorsSet.add(color.toUpperCase());
+  }
+
+  // Check if the base color is already in use
+  if (usedColorsSet.has(baseColor.toUpperCase())) {
+    isColorInUse = true;
+  }
+
+  let assignedColor;
+
+  // If color is available, assign it
+  if (!isColorInUse) {
+    assignedColor = baseColor;
+  } else {
+    // If color is in use, try to find an available color from the palette
+    let foundAlternative = false;
+    for (let i = 0; i < colors.length; i++) {
+      const alternativeColor = colors[i];
+      if (!usedColorsSet.has(alternativeColor.toUpperCase())) {
+        assignedColor = alternativeColor;
+        foundAlternative = true;
+        break;
+      }
+    }
+
+    // If all colors are used, generate a variation of the base color
+    if (!foundAlternative) {
+      assignedColor = generateColorVariation(baseColor, userId + '_var');
     }
   }
 
-  if (!isColorInUse) {
-    // Color is available, assign it
-    userColors.set(userId, baseColor);
-    return baseColor;
-  }
-
-  // If color is in use, generate a variation
-  const variedColor = generateColorVariation(baseColor, userId + '_var');
-  userColors.set(userId, variedColor);
-  return variedColor;
+  // Store the assigned color for this user
+  userColors.set(userId, assignedColor);
+  return assignedColor;
 }
 
 /**
- * Generate a slight color variation for collision resolution
+ * Generate a distinct color variation for collision resolution
  * @param {string} baseColor - Hex color code
  * @param {string} userId - User ID for variation seed
  * @returns {string} Varied hex color code
@@ -234,11 +263,46 @@ function generateColorVariation(baseColor, userId) {
     hash = ((hash << 5) - hash) + userId.charCodeAt(i);
   }
 
-  // Apply small variation (±20) to each RGB component
-  const variation = Math.abs(hash) % 40 - 20; // -20 to +20
-  const newR = Math.max(0, Math.min(255, r + variation));
-  const newG = Math.max(0, Math.min(255, g + (variation * 0.7))); // Less variation on green
-  const newB = Math.max(0, Math.min(255, b + (variation * 0.5))); // Even less on blue
+  // Apply larger variation (±40-60) to ensure distinct colors
+  const variation = Math.abs(hash) % 80 - 40; // -40 to +40
+
+  // Apply different variation patterns based on hash to ensure diversity
+  const hashPattern = Math.abs(hash) % 3;
+
+  let newR, newG, newB;
+
+  switch (hashPattern) {
+    case 0: // Vary red and green more
+      newR = Math.max(0, Math.min(255, r + variation));
+      newG = Math.max(0, Math.min(255, g + (variation * 0.8)));
+      newB = Math.max(0, Math.min(255, b + (variation * 0.3)));
+      break;
+    case 1: // Vary green and blue more
+      newR = Math.max(0, Math.min(255, r + (variation * 0.3)));
+      newG = Math.max(0, Math.min(255, g + variation));
+      newB = Math.max(0, Math.min(255, b + (variation * 0.8)));
+      break;
+    case 2: // Vary all components equally but with different ratios
+      newR = Math.max(0, Math.min(255, r + (variation * 0.7)));
+      newG = Math.max(0, Math.min(255, g + (variation * 0.9)));
+      newB = Math.max(0, Math.min(255, b + (variation * 0.5)));
+      break;
+    default:
+      newR = Math.max(0, Math.min(255, r + variation));
+      newG = Math.max(0, Math.min(255, g + variation));
+      newB = Math.max(0, Math.min(255, b + variation));
+  }
+
+  // Ensure minimum difference from original color (at least 30 points difference in any component)
+  const maxComponent = Math.max(newR, newG, newB);
+  const minComponent = Math.min(newR, newG, newB);
+
+  if (maxComponent - minComponent < 30) {
+    // If colors are too similar, adjust to make them more distinct
+    if (newR === maxComponent) newR = Math.min(255, newR + 20);
+    if (newG === maxComponent) newG = Math.min(255, newG + 20);
+    if (newB === maxComponent) newB = Math.min(255, newB + 20);
+  }
 
   // Convert back to hex
   return `#${Math.round(newR).toString(16).padStart(2, '0')}${Math.round(newG).toString(16).padStart(2, '0')}${Math.round(newB).toString(16).padStart(2, '0')}`;

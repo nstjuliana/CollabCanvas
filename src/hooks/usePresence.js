@@ -101,6 +101,17 @@ function usePresence() {
       }
 
       const unsubscribe = subscribeToPresence((updatedPresence) => {
+        // Check for users who have left and remove their colors from cache
+        const currentUserIds = new Set(Object.keys(updatedPresence));
+        const previousUserIds = new Set(Object.keys(presence));
+
+        // Find users who left and remove their colors
+        for (const leftUserId of previousUserIds) {
+          if (!currentUserIds.has(leftUserId)) {
+            removeUserColor(leftUserId);
+          }
+        }
+
         // Add colors to presence
         const presenceWithColors = Object.entries(updatedPresence).reduce((acc, [uid, presenceData]) => {
           acc[uid] = {

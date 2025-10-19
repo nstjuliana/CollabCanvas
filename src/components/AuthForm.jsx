@@ -165,6 +165,7 @@ function AuthForm() {
             >
               {isLogin ? 'Sign up' : 'Log in'}
             </button>
+
           </p>
         </div>
       </div>
@@ -179,4 +180,5 @@ function AuthForm() {
 }
 
 export default AuthForm;
+
 

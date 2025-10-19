@@ -4,7 +4,7 @@
  * Supports streaming responses and function calling
  */
 
-import { streamText, tool } from 'ai';
+import { streamText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import * as agentActions from './agentActions';
@@ -389,11 +389,11 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
     // Define tools using Zod schemas (proper AI SDK format)
     const tools = {
       findShapes: tool({
-        description: 'Find shapes matching specific criteria (type, color, position, or text content). Call with empty criteria to get all shapes.',
+        description: 'Find shapes on the canvas. Returns an array of shape objects, each with an "id" field that you MUST use in subsequent operations. Example return: [{id: "abc123", type: "circle", x: 100, y: 200, fill: "red"}]',
         inputSchema: z.object({
           criteria: z.object({
             type: z.enum(['rectangle', 'circle', 'text', 'image', 'square']).optional().describe('Shape type to filter by'),
-            color: z.string().optional().describe('Color to filter by (hex code or color name like "red", "blue")'),
+            color: z.string().optional().describe('Color to filter by. Supports: red, orange, yellow, green, cyan, aqua, blue, purple, violet, pink, brown, gray, black, white, magenta, fuchsia, teal, olive, gold, beige, tan, maroon, burgundy, lavender, lilac, turquoise, or hex codes. Uses RGB range matching to find all shades of a color.'),
             position: z.enum(['leftmost', 'rightmost', 'topmost', 'bottommost', 'left', 'right', 'top', 'bottom']).optional().describe('Find shape in specific relative position'),
             text: z.string().optional().describe('Text content to search for (only for text shapes)'),
           }).optional().describe('Search criteria. Omit or pass empty object to get all shapes'),
@@ -401,7 +401,16 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
         execute: async ({ criteria }) => {
           const result = await agentActions.findShapes(shapes, criteria || {});
           if (onToolCall) onToolCall({ function: 'findShapes', args: { criteria }, result });
-          return result;
+          // Return simplified data focusing on what the AI needs
+          return result.map(shape => ({
+            id: shape.id,
+            type: shape.type,
+            x: shape.x,
+            y: shape.y,
+            fill: shape.fill,
+            width: shape.width,
+            height: shape.height,
+          }));
         },
       }),
       
@@ -427,42 +436,176 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
         },
       }),
       
-      moveShapeBy: tool({
-        description: 'Move a shape by a relative offset. Positive X moves right, negative left. Positive Y moves down, negative up.',
+      moveShapeTo: tool({
+        description: 'Move a shape to an absolute position on the canvas. You MUST call findShapes first to get the shape ID. Canvas is 5000x5000. Middle = (2500, 2500). Use this for "move to middle", "move to top-left", etc.',
         inputSchema: z.object({
-          shapeId: z.string().describe('Shape ID'),
+          shapeId: z.string().describe('Shape ID from findShapes result'),
+          x: z.number().describe('Absolute X position (0 = left edge, 2500 = center, 5000 = right edge)'),
+          y: z.number().describe('Absolute Y position (0 = top edge, 2500 = center, 5000 = bottom edge)'),
+        }),
+        execute: async ({ shapeId, x, y }) => {
+          const result = await agentActions.moveShapeTo(shapeId, x, y);
+          if (onToolCall) onToolCall({ function: 'moveShapeTo', args: { shapeId, x, y }, result });
+          return { success: true, message: `Moved shape ${shapeId} to (${x}, ${y})` };
+        },
+      }),
+      
+      moveShapeBy: tool({
+        description: 'Move a shape by a relative offset. You MUST call findShapes first to get the shape ID. Positive X moves right, negative left. Positive Y moves down, negative up.',
+        inputSchema: z.object({
+          shapeId: z.string().describe('Shape ID from findShapes result'),
           deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
           deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
         }),
         execute: async ({ shapeId, deltaX, deltaY }) => {
           const result = await agentActions.moveShapeBy(shapeId, deltaX, deltaY);
           if (onToolCall) onToolCall({ function: 'moveShapeBy', args: { shapeId, deltaX, deltaY }, result });
-          return result;
+          return { success: true, message: `Moved shape ${shapeId}` };
         },
       }),
       
       changeShapeColor: tool({
-        description: 'Change the color of a single shape',
+        description: 'Change the color of a single shape. You MUST call findShapes first to get the shape ID.',
         inputSchema: z.object({
-          shapeId: z.string().describe('Shape ID'),
+          shapeId: z.string().describe('Shape ID from findShapes result'),
           color: z.string().describe('New color (hex or color name)'),
         }),
         execute: async ({ shapeId, color }) => {
           const result = await agentActions.changeShapeColor(shapeId, color);
           if (onToolCall) onToolCall({ function: 'changeShapeColor', args: { shapeId, color }, result });
-          return result;
+          return { success: true, message: `Changed color of shape ${shapeId} to ${color}` };
         },
       }),
       
       deleteShape: tool({
-        description: 'Delete a single shape by its ID',
+        description: 'Delete a single shape by its ID. You MUST call findShapes first to get the shape ID.',
         inputSchema: z.object({
-          shapeId: z.string().describe('ID of the shape to delete'),
+          shapeId: z.string().describe('Shape ID from findShapes result'),
         }),
         execute: async ({ shapeId }) => {
           const result = await agentActions.deleteShape(shapeId);
           if (onToolCall) onToolCall({ function: 'deleteShape', args: { shapeId }, result });
-          return result;
+          return { success: true, message: `Deleted shape ${shapeId}` };
+        },
+      }),
+      
+      // Single shape operations - for "a square", "any circle", etc.
+      moveOneShapeByType: tool({
+        description: 'Find and move ONE shape of a specific type. Use this when user says "a square", "any circle", etc. (singular).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to move'),
+          deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
+          deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
+          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
+        }),
+        execute: async ({ type, deltaX, deltaY, color }) => {
+          const criteria = { type, ...(color && { color }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          // Only move the first one
+          await agentActions.moveShapeBy(foundShapes[0].id, deltaX, deltaY);
+          if (onToolCall) onToolCall({ function: 'moveOneShapeByType', args: { type, deltaX, deltaY, color }, result: [foundShapes[0]] });
+          return { success: true, message: `Moved one ${type}`, count: 1 };
+        },
+      }),
+      
+      // Batch operations - for "all squares", "the circles", etc.
+      moveShapesByType: tool({
+        description: 'Find and move ALL shapes of a specific type. Use this when user says "all squares", "the circles", etc. (plural).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to move'),
+          deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
+          deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
+          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
+        }),
+        execute: async ({ type, deltaX, deltaY, color }) => {
+          const criteria = { type, ...(color && { color }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          const shapeIds = foundShapes.map(s => s.id);
+          await agentActions.moveMultipleShapesBy(shapeIds, deltaX, deltaY);
+          if (onToolCall) onToolCall({ function: 'moveShapesByType', args: { type, deltaX, deltaY, color }, result: foundShapes });
+          return { success: true, message: `Moved ${foundShapes.length} ${type} shape(s)`, count: foundShapes.length };
+        },
+      }),
+      
+      changeOneShapeColorByType: tool({
+        description: 'Find and change color of ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to recolor'),
+          newColor: z.string().describe('New color to apply'),
+          currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
+        }),
+        execute: async ({ type, newColor, currentColor }) => {
+          const criteria = { type, ...(currentColor && { color: currentColor }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          await agentActions.changeShapeColor(foundShapes[0].id, newColor);
+          if (onToolCall) onToolCall({ function: 'changeOneShapeColorByType', args: { type, newColor, currentColor }, result: [foundShapes[0]] });
+          return { success: true, message: `Changed color of one ${type} to ${newColor}`, count: 1 };
+        },
+      }),
+      
+      changeColorByType: tool({
+        description: 'Find and change color of ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to recolor'),
+          newColor: z.string().describe('New color to apply'),
+          currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
+        }),
+        execute: async ({ type, newColor, currentColor }) => {
+          const criteria = { type, ...(currentColor && { color: currentColor }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          const shapeIds = foundShapes.map(s => s.id);
+          await agentActions.changeMultipleShapesColor(shapeIds, newColor);
+          if (onToolCall) onToolCall({ function: 'changeColorByType', args: { type, newColor, currentColor }, result: foundShapes });
+          return { success: true, message: `Changed color of ${foundShapes.length} ${type} shape(s) to ${newColor}`, count: foundShapes.length };
+        },
+      }),
+      
+      deleteOneShapeByType: tool({
+        description: 'Find and delete ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shape to delete'),
+          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
+        }),
+        execute: async ({ type, color }) => {
+          const criteria = { type, ...(color && { color }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          await agentActions.deleteShape(foundShapes[0].id);
+          if (onToolCall) onToolCall({ function: 'deleteOneShapeByType', args: { type, color }, result: [foundShapes[0]] });
+          return { success: true, message: `Deleted one ${type}`, count: 1 };
+        },
+      }),
+      
+      deleteShapesByType: tool({
+        description: 'Find and delete ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
+        inputSchema: z.object({
+          type: z.enum(['rectangle', 'circle', 'text', 'square']).describe('Type of shapes to delete'),
+          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
+        }),
+        execute: async ({ type, color }) => {
+          const criteria = { type, ...(color && { color }) };
+          const foundShapes = await agentActions.findShapes(shapes, criteria);
+          if (foundShapes.length === 0) {
+            return { success: false, message: `No ${type} shapes found` };
+          }
+          const shapeIds = foundShapes.map(s => s.id);
+          await agentActions.deleteMultipleShapes(shapeIds);
+          if (onToolCall) onToolCall({ function: 'deleteShapesByType', args: { type, color }, result: foundShapes });
+          return { success: true, message: `Deleted ${foundShapes.length} ${type} shape(s)`, count: foundShapes.length };
         },
       }),
     };
@@ -470,17 +613,55 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
     // Stream the response with function calling
     const result = await streamText({
       model: openai('gpt-4-turbo'),
+      stopWhen: stepCountIs(5), // Allow up to 5 steps for multi-tool workflows (e.g., find then move)
       messages: [
         {
           role: 'system',
           content: `You are an AI assistant that helps users manipulate shapes on a canvas. 
-The canvas is 5000x5000 pixels with origin at top-left (0,0).
-When asked to move shapes "left", use negative X. "Right" uses positive X. 
-"Up" uses negative Y. "Down" uses positive Y.
-To find shapes, use findShapes with appropriate criteria. To get all shapes, call findShapes with empty criteria {}.
-Always query for shapes using findShapes before operating on them.
-When you execute tool calls, provide a brief confirmation of what you did.
-Be helpful and execute the user's intent accurately.`,
+
+CANVAS INFORMATION:
+- Canvas size: 5000 x 5000 pixels
+- Origin: Top-left corner is (0, 0)
+- Center/Middle: (2500, 2500)
+- Coordinate system: X increases right, Y increases down
+
+POSITIONAL REFERENCE:
+- "top" = y near 0 (e.g., y: 100-500)
+- "bottom" = y near 5000 (e.g., y: 4500-4900)
+- "left" = x near 0 (e.g., x: 100-500)
+- "right" = x near 5000 (e.g., x: 4500-4900)
+- "middle" or "center" = (2500, 2500)
+- "top-left" = (250, 250)
+- "top-right" = (4750, 250)
+- "bottom-left" = (250, 4750)
+- "bottom-right" = (4750, 4750)
+
+CRITICAL RULES - Pay attention to SINGULAR vs PLURAL:
+
+SINGULAR (a, any, one) → Use "One" tools:
+- "Move A square" → moveOneShapeByType
+- "Move ANY square" → moveOneShapeByType  
+- "Delete A circle" → deleteOneShapeByType
+
+PLURAL (all, the, multiple) → Use plural "ByType" tools:
+- "Move ALL squares" → moveShapesByType
+- "Move THE squares" → moveShapesByType
+- "Delete circles" → deleteShapesByType
+
+MOVEMENT:
+- Relative: "left" = negative X, "right" = positive X, "up" = negative Y, "down" = positive Y
+- Absolute positions: Use moveShapeTo with coordinates from POSITIONAL REFERENCE above
+- Distance examples: 50px (small), 100px (medium), 340px (medium-large), 500px (large)
+
+EXAMPLES:
+User: "Move the blue square to the middle"
+✓ Call: findShapes({type: "square", color: "blue"}), then moveShapeTo({shapeId: "...", x: 2500, y: 2500})
+
+User: "Move any square 340px to the left"
+✓ Call: moveOneShapeByType({type: "square", deltaX: -340, deltaY: 0})
+
+NEVER use findShapes alone - it doesn't do anything!
+After executing, confirm what you did.`,
         },
         {
           role: 'user',

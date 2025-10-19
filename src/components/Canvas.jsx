@@ -634,6 +634,11 @@ function Canvas() {
       }
       // Clean up stored position
       delete shapeDragStartPosition.current[shape.id];
+    } else {
+      // Update color picker to dragged shape's color
+      if (shape.fill) {
+        setSelectedColor(shape.fill);
+      }
     }
   };
 
@@ -698,6 +703,9 @@ function Canvas() {
         return;
       }
       
+      // Update color picker to clicked shape's color
+      setSelectedColor(shape.fill);
+      
       // Handle multi-select with Ctrl/Cmd key
       if (isCtrlPressed) {
         // Toggle selection
@@ -705,7 +713,6 @@ function Canvas() {
       } else {
         // Single selection
         await selectShape(shape.id);
-        setSelectedColor(shape.fill);
       }
     }
   };
@@ -922,6 +929,12 @@ function Canvas() {
         // Replace selection
         // Don't await - let it happen in background for instant UI feedback
         selectShapes(selectableShapes, false);
+      }
+      
+      // Update color picker to first selected shape's color
+      const firstShape = shapes.find(s => s.id === selectableShapes[0]);
+      if (firstShape && firstShape.fill) {
+        setSelectedColor(firstShape.fill);
       }
     }
   };

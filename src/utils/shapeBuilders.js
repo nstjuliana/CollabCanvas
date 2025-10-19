@@ -31,6 +31,94 @@ export function normalizeShapeType(type) {
 }
 
 /**
+ * RGB color ranges for the 20 most popular colors
+ * Each range defines min/max values for R, G, B channels
+ */
+const COLOR_RANGES = {
+  red: { r: [128, 255], g: [0, 100], b: [0, 100] },
+  orange: { r: [200, 255], g: [80, 180], b: [0, 80] },
+  yellow: { r: [200, 255], g: [200, 255], b: [0, 100] },
+  green: { r: [0, 150], g: [100, 255], b: [0, 150] },
+  cyan: { r: [0, 150], g: [200, 255], b: [200, 255] },
+  aqua: { r: [0, 150], g: [200, 255], b: [200, 255] },
+  blue: { r: [0, 100], g: [0, 100], b: [128, 255] },
+  purple: { r: [100, 200], g: [0, 100], b: [150, 255] },
+  violet: { r: [100, 200], g: [0, 100], b: [150, 255] },
+  pink: { r: [200, 255], g: [100, 180], b: [150, 220] },
+  brown: { r: [80, 180], g: [40, 120], b: [0, 80] },
+  gray: { r: [80, 220], g: [80, 220], b: [80, 220] },
+  grey: { r: [80, 220], g: [80, 220], b: [80, 220] },
+  black: { r: [0, 60], g: [0, 60], b: [0, 60] },
+  white: { r: [220, 255], g: [220, 255], b: [220, 255] },
+  magenta: { r: [180, 255], g: [0, 100], b: [180, 255] },
+  fuchsia: { r: [180, 255], g: [0, 100], b: [180, 255] },
+  teal: { r: [0, 100], g: [100, 200], b: [100, 180] },
+  olive: { r: [100, 180], g: [100, 180], b: [0, 80] },
+  gold: { r: [200, 255], g: [160, 210], b: [0, 80] },
+  beige: { r: [200, 245], g: [180, 220], b: [130, 180] },
+  tan: { r: [200, 245], g: [180, 220], b: [130, 180] },
+  maroon: { r: [80, 150], g: [0, 60], b: [0, 60] },
+  burgundy: { r: [80, 150], g: [0, 60], b: [0, 60] },
+  lavender: { r: [180, 230], g: [150, 200], b: [220, 255] },
+  lilac: { r: [180, 230], g: [150, 200], b: [220, 255] },
+  turquoise: { r: [0, 120], g: [180, 255], b: [180, 255] },
+};
+
+/**
+ * Convert hex color to RGB object
+ * @param {string} hex - Hex color (e.g., "#FF6B6B")
+ * @returns {Object} RGB object with r, g, b properties
+ */
+export function hexToRgb(hex) {
+  // Remove # if present
+  const cleanHex = hex.replace('#', '');
+  
+  // Parse hex values
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  
+  return { r, g, b };
+}
+
+/**
+ * Check if an RGB value falls within a color range
+ * @param {Object} rgb - RGB object with r, g, b properties
+ * @param {Object} range - Color range with r, g, b arrays [min, max]
+ * @returns {boolean} True if RGB is within range
+ */
+export function isColorInRange(rgb, range) {
+  return (
+    rgb.r >= range.r[0] && rgb.r <= range.r[1] &&
+    rgb.g >= range.g[0] && rgb.g <= range.g[1] &&
+    rgb.b >= range.b[0] && rgb.b <= range.b[1]
+  );
+}
+
+/**
+ * Match a hex color against a color name using RGB ranges
+ * @param {string} hexColor - Hex color to check (e.g., "#FF6B6B")
+ * @param {string} colorName - Color name to match against (e.g., "red")
+ * @returns {boolean} True if the hex color matches the color name range
+ */
+export function matchesColorRange(hexColor, colorName) {
+  if (!hexColor || !colorName) return false;
+  
+  // Normalize color name
+  const normalized = colorName.toLowerCase().trim().replace(/\s+/g, '');
+  
+  // Get the color range
+  const range = COLOR_RANGES[normalized];
+  if (!range) return false;
+  
+  // Convert hex to RGB
+  const rgb = hexToRgb(hexColor);
+  
+  // Check if RGB is in range
+  return isColorInRange(rgb, range);
+}
+
+/**
  * Normalize color to hex format
  * @param {string} color - Color input (hex or color name)
  * @returns {string} Hex color
@@ -43,7 +131,7 @@ export function normalizeColor(color) {
     return color.toLowerCase();
   }
   
-  // Map color names to hex
+  // Map color names to hex (for creating new shapes)
   const colorMap = {
     'red': '#FF6B6B',
     'blue': '#45B7D1',

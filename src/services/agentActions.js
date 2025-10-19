@@ -13,7 +13,7 @@ import {
   deleteShape as deleteShapeService,
   getShape,
 } from './shapes';
-import { buildShapeObject, buildMultipleShapeObjects, buildGridShapeObjects, normalizeColor, normalizeShapeType } from '../utils/shapeBuilders';
+import { buildShapeObject, buildMultipleShapeObjects, buildGridShapeObjects, normalizeColor, normalizeShapeType, matchesColorRange } from '../utils/shapeBuilders';
 import { SHAPE_TYPES } from '../utils/constants';
 
 /**
@@ -47,14 +47,19 @@ export function findShapes(shapes, criteria = {}) {
     results = results.filter(s => s.type === normalizedType);
   }
   
-  // Filter by color
+  // Filter by color using RGB range matching
   if (criteria.color) {
-    const normalizedColor = normalizeColor(criteria.color);
     results = results.filter(s => {
-      const shapeColor = s.fill?.toLowerCase();
-      return shapeColor === normalizedColor || 
-             shapeColor?.includes(normalizedColor) ||
-             normalizedColor.includes(shapeColor);
+      if (!s.fill) return false;
+      
+      // Try RGB range matching first (supports "red", "dark red", "crimson", etc.)
+      if (matchesColorRange(s.fill, criteria.color)) {
+        return true;
+      }
+      
+      // Fallback to exact hex match
+      const normalizedColor = normalizeColor(criteria.color);
+      return s.fill.toLowerCase() === normalizedColor.toLowerCase();
     });
   }
   

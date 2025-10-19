@@ -127,10 +127,10 @@ function AIAgentPanel({ shapes }) {
    */
   const exampleCommands = [
     'Create a red square at (200, 200)',
+    'Move the blue square to the middle',
+    'Move any circle to the top-left',
     'Create a grid of 4 blue circles',
-    'Move the leftmost rectangle 50px to the right',
     'Change all red shapes to green',
-    'Delete the text on the bottom',
   ];
 
   const handleExampleClick = (exampleCommand) => {

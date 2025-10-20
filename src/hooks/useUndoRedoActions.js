@@ -13,7 +13,7 @@ const useUndoRedoActions = ({
   deleteMultipleShapes,
   selectShape,
   selectShapes,
-  updateShape,
+  updateShapes,
   undoHistory,
   redoHistory,
   startUndoRedo,
@@ -96,8 +96,9 @@ const useUndoRedoActions = ({
             }))
             .filter(({ id }) => shapes.find(s => s.id === id));
 
-          await Promise.all(
-            validUpdates.map(({ id, updates }) => updateShape(id, updates))
+          // Single batch write for all updates
+          await updateShapes(
+            validUpdates.map(({ id, updates }) => ({ id, ...updates }))
           );
           break;
         }
@@ -177,8 +178,9 @@ const useUndoRedoActions = ({
             }))
             .filter(({ id }) => shapes.find(s => s.id === id));
 
-          await Promise.all(
-            validUpdates.map(({ id, updates }) => updateShape(id, updates))
+          // Single batch write for all updates
+          await updateShapes(
+            validUpdates.map(({ id, updates }) => ({ id, ...updates }))
           );
           break;
         }

@@ -11,7 +11,7 @@ const useTextEditing = ({
   stagePosition,
   shapeRefs,
   shapes,
-  updateShape,
+  updateShapes,
   deleteShape,
   unlockShape,
   createShapeAtPosition,
@@ -122,7 +122,7 @@ const useTextEditing = ({
         const previousText = shape?.text || '';
 
         try {
-          await updateShape(editingShapeId, { text });
+          await updateShapes(editingShapeId, { text });
 
           // Add to history only if text actually changed
           if (previousText !== text) {

@@ -16,7 +16,7 @@ const useShapeManipulation = ({
   deleteShape,
   selectShape,
   selectShapes,
-  updateShape,
+  updateShapes,
   handleShapeDragStart,
   handleShapeDragEnd,
   addToHistory,

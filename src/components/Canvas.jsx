@@ -52,7 +52,7 @@ function Canvas() {
     selectedShapeIds,
     selectedShapeId,
     createShapes,
-    updateShape,
+    updateShapes,
     deleteShape,
     deleteMultipleShapes,
     clearAllShapes,
@@ -98,7 +98,7 @@ function Canvas() {
     deleteMultipleShapes,
     selectShape,
     selectShapes,
-    updateShape,
+    updateShapes,
     undoHistory,
     redoHistory,
     startUndoRedo,
@@ -113,7 +113,7 @@ function Canvas() {
     deleteShape,
     deleteMultipleShapes,
     selectShape,
-    updateShape,
+    updateShapes,
     addToHistory,
     handleUndo,
     handleRedo,
@@ -195,7 +195,7 @@ function Canvas() {
     stagePosition,
     shapeRefs,
     shapes,
-    updateShape,
+    updateShapes,
     deleteShape,
     unlockShape,
     createShapeAtPosition,
@@ -220,7 +220,7 @@ function Canvas() {
     deleteShape,
     selectShape,
     selectShapes,
-    updateShape,
+    updateShapes,
     handleShapeDragStart,
     handleShapeDragEnd,
     addToHistory,
@@ -469,9 +469,9 @@ function Canvas() {
       }).filter(Boolean);
 
       try {
-        // Update all selected shapes
-        await Promise.all(
-          shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
+        // Update all selected shapes with a single batch write
+        await updateShapes(
+          shapesToUpdate.map(id => ({ id, fill: newColor }))
         );
 
         // Add to history
@@ -733,7 +733,7 @@ function Canvas() {
       }
 
       // Update shape in Firestore
-      await updateShape(transformedShapeId, updates);
+      await updateShapes(transformedShapeId, updates);
 
       // Add to history
       addToHistory({

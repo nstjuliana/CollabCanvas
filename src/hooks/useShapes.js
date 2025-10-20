@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   createShapes as createShapesService,
-  updateShape as updateShapeService,
+  updateShapes as updateShapesService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
   clearAllLocks as clearAllLocksService,
@@ -109,20 +109,23 @@ function useShapes(presence = {}) {
 
 
   /**
-   * Update an existing shape
-   * @param {string} shapeId - Shape ID
-   * @param {object} updates - Properties to update
+   * Update one or more shapes
+   * @param {string|Array<object>} shapeIdOrUpdates - Shape ID or array of {id, ...updates}
+   * @param {object} [updates] - Properties to update (when first param is string)
    * @returns {Promise<void>}
    */
-  const updateShape = useCallback(async (shapeId, updates) => {
+  const updateShapes = useCallback(async (shapeIdOrUpdates, updates) => {
     try {
       setError(null);
-      await updateShapeService(shapeId, updates);
+      await updateShapesService(shapeIdOrUpdates, updates);
     } catch (err) {
       setError(err.message);
       throw err;
     }
   }, []);
+
+  // Backward compatibility alias
+  const updateShape = updateShapes;
 
   /**
    * Delete a shape
@@ -365,7 +368,7 @@ function useShapes(presence = {}) {
   const handleDragEnd = useCallback(async (shapeId, x, y) => {
     try {
       // Update position in Firestore
-      await updateShape(shapeId, { x, y });
+      await updateShapes(shapeId, { x, y });
       
       // Don't unlock - the shape remains selected and locked
       // It will be unlocked when the user deselects it
@@ -373,7 +376,7 @@ function useShapes(presence = {}) {
     } catch (err) {
       // If update failed, still keep the lock since it's selected
     }
-  }, [updateShape]);
+  }, [updateShapes]);
 
   return {
     // State
@@ -385,7 +388,8 @@ function useShapes(presence = {}) {
     
     // Methods
     createShapes,           // Unified create function (1 or many)
-    updateShape,
+    updateShapes,           // Unified update function (1 or many)
+    updateShape,            // Backward compatibility
     deleteShape,
     deleteMultipleShapes,
     clearAllShapes,

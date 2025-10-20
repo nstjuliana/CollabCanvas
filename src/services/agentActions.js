@@ -9,7 +9,7 @@
 
 import {
   createShapes as createShapesService,
-  updateShape as updateShapeService,
+  updateShapes as updateShapesService,
   deleteShape as deleteShapeService,
   getShape,
 } from './shapes';

@@ -12,7 +12,7 @@ const useKeyboardShortcuts = ({
   deleteShape,
   deleteMultipleShapes,
   selectShape,
-  updateShape,
+  updateShapes,
   addToHistory,
   handleUndo,
   handleRedo,
@@ -185,19 +185,19 @@ const useKeyboardShortcuts = ({
           return shape ? { id, x: shape.x, y: shape.y } : null;
         }).filter(Boolean);
 
-        // Update all selected shapes
+        // Update all selected shapes with a single batch write
         try {
-          await Promise.all(
-            shapesToMove.map(id => {
-              const shape = shapes.find(s => s.id === id);
-              if (shape) {
-                return updateShape(id, {
-                  x: shape.x + offsetX,
-                  y: shape.y + offsetY
-                });
-              }
-            })
-          );
+          const updatesToApply = shapesToMove.map(id => {
+            const shape = shapes.find(s => s.id === id);
+            return {
+              id,
+              x: shape.x + offsetX,
+              y: shape.y + offsetY
+            };
+          });
+
+          // Single batch write for all shapes
+          await updateShapes(updatesToApply);
 
           // Add to history
           addToHistory({
@@ -226,7 +226,7 @@ const useKeyboardShortcuts = ({
     deleteShape,
     deleteMultipleShapes,
     selectShape,
-    updateShape,
+    updateShapes,
     addToHistory,
     handleUndo,
     handleRedo,

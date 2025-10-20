@@ -28,6 +28,7 @@ import BackgroundLayer from './BackgroundLayer';
 import ShapesLayer from './ShapesLayer';
 import CursorsLayer from './CursorsLayer';
 import AIAgentPanel from './AIAgentPanel';
+import PropertiesPanel from './PropertiesPanel';
 
 function Canvas() {
   const {
@@ -584,167 +585,178 @@ function Canvas() {
   const handleTransformEnd = async (e) => {
     if (selectedShapeIds.length === 0) return;
     
-    const node = e.target;
-    
     try {
-      // Find which shape was transformed
-      const transformedShapeId = node.attrs?.id;
-      const shape = shapes.find(s => s.id === transformedShapeId);
-      
-      if (!shape) return;
+      // When multiple shapes are selected, we need to update all of them
+      const allPreviousStates = [];
+      const allNewStates = [];
+      const updatesToApply = [];
 
-      // Store previous state for undo
-      const previousState = {
-        x: shape.x,
-        y: shape.y,
-        rotation: shape.rotation,
-        width: shape.width,
-        height: shape.height,
-        scaleX: shape.scaleX,
-        scaleY: shape.scaleY,
-        // Include star-specific properties
-        ...(shape.type === SHAPE_TYPES.STAR && {
-          innerRadius: shape.innerRadius,
-          outerRadius: shape.outerRadius,
-        }),
-        // Include line-specific properties
-        ...(shape.type === SHAPE_TYPES.LINE && {
-          points: shape.points,
-          strokeWidth: shape.strokeWidth,
-        }),
-      };
+      // Iterate through all selected shapes
+      for (const shapeId of selectedShapeIds) {
+        const shape = shapes.find(s => s.id === shapeId);
+        const node = shapeRefs.current[shapeId];
+        
+        if (!shape || !node) continue;
 
-      // Get the transformed dimensions and rotation
-      const updates = {
-        x: node.x(),
-        y: node.y(),
-        rotation: node.rotation(),
-      };
+        // Store previous state for undo
+        const previousState = {
+          x: shape.x,
+          y: shape.y,
+          rotation: shape.rotation,
+          width: shape.width,
+          height: shape.height,
+          scaleX: shape.scaleX,
+          scaleY: shape.scaleY,
+          // Include star-specific properties
+          ...(shape.type === SHAPE_TYPES.STAR && {
+            innerRadius: shape.innerRadius,
+            outerRadius: shape.outerRadius,
+          }),
+          // Include line-specific properties
+          ...(shape.type === SHAPE_TYPES.LINE && {
+            points: shape.points,
+            strokeWidth: shape.strokeWidth,
+          }),
+        };
 
+        // Get the transformed dimensions and rotation
+        const updates = {
+          x: node.x(),
+          y: node.y(),
+          rotation: node.rotation(),
+        };
 
-      // Bake scaling into dimensions for rectangles and circles; preserve scale for text
-      if (shape.type === SHAPE_TYPES.RECTANGLE || shape.type === SHAPE_TYPES.CIRCLE) {
-        const newWidth = node.width() * node.scaleX();
-        const newHeight = node.height() * node.scaleY();
+        // Bake scaling into dimensions for rectangles and circles; preserve scale for text
+        if (shape.type === SHAPE_TYPES.RECTANGLE || shape.type === SHAPE_TYPES.CIRCLE) {
+          const newWidth = node.width() * node.scaleX();
+          const newHeight = node.height() * node.scaleY();
 
-        updates.width = newWidth;
-        updates.height = newHeight;
+          updates.width = newWidth;
+          updates.height = newHeight;
 
-        // Update the node's dimensions immediately to prevent flicker
-        node.width(newWidth);
-        node.height(newHeight);
+          // Update the node's dimensions immediately to prevent flicker
+          node.width(newWidth);
+          node.height(newHeight);
 
-        // Reset scale to 1 after applying it to width/height
-        node.scaleX(1);
-        node.scaleY(1);
-      } else if (shape.type === SHAPE_TYPES.STAR) {
-        // For stars, calculate new radius values from the applied scaling
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        const avgScale = (scaleX + scaleY) / 2; // Use average scale for uniform scaling
+          // Reset scale to 1 after applying it to width/height
+          node.scaleX(1);
+          node.scaleY(1);
+        } else if (shape.type === SHAPE_TYPES.STAR) {
+          // For stars, calculate new radius values from the applied scaling
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+          const avgScale = (scaleX + scaleY) / 2; // Use average scale for uniform scaling
 
-        // Get current radius values or calculate from dimensions
-        const currentInnerRadius = shape.innerRadius || (Math.min(shape.width, shape.height) / 2) * 0.5;
-        const currentOuterRadius = shape.outerRadius || Math.min(shape.width, shape.height) / 2;
+          // Get current radius values or calculate from dimensions
+          const currentInnerRadius = shape.innerRadius || (Math.min(shape.width, shape.height) / 2) * 0.5;
+          const currentOuterRadius = shape.outerRadius || Math.min(shape.width, shape.height) / 2;
 
-        // Apply scaling to radii
-        const newInnerRadius = currentInnerRadius * avgScale;
-        const newOuterRadius = currentOuterRadius * avgScale;
+          // Apply scaling to radii
+          const newInnerRadius = currentInnerRadius * avgScale;
+          const newOuterRadius = currentOuterRadius * avgScale;
 
-        updates.innerRadius = newInnerRadius;
-        updates.outerRadius = newOuterRadius;
+          updates.innerRadius = newInnerRadius;
+          updates.outerRadius = newOuterRadius;
 
-        // Update the node's scale back to 1
-        node.scaleX(1);
-        node.scaleY(1);
+          // Update the node's scale back to 1
+          node.scaleX(1);
+          node.scaleY(1);
 
-        // Update width/height to match the new scaled dimensions for consistency
-        const newWidth = node.width() * scaleX;
-        const newHeight = node.height() * scaleY;
-        updates.width = newWidth;
-        updates.height = newHeight;
-        node.width(newWidth);
-        node.height(newHeight);
+          // Update width/height to match the new scaled dimensions for consistency
+          const newWidth = node.width() * scaleX;
+          const newHeight = node.height() * scaleY;
+          updates.width = newWidth;
+          updates.height = newHeight;
+          node.width(newWidth);
+          node.height(newHeight);
 
-      } else if (shape.type === SHAPE_TYPES.LINE) {
-        // For lines, we need to bake the scale into the points array
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        const originalPoints = node.points();
+        } else if (shape.type === SHAPE_TYPES.LINE) {
+          // For lines, we need to bake the scale into the points array
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+          const originalPoints = node.points();
 
-        // Ensure we have valid points
-        if (!originalPoints || originalPoints.length < 2) {
-          return; // Skip update if no valid points
+          // Ensure we have valid points
+          if (!originalPoints || originalPoints.length < 2) {
+            continue; // Skip this shape if no valid points
+          }
+
+          // Apply scale to each point coordinate
+          const scaledPoints = [];
+          for (let i = 0; i < originalPoints.length; i += 2) {
+            scaledPoints.push(originalPoints[i] * scaleX);      // x coordinate
+            scaledPoints.push(originalPoints[i + 1] * scaleY);  // y coordinate
+          }
+
+          updates.points = scaledPoints;
+          // Reset scale to 1 since we baked it into the points
+          updates.scaleX = 1;
+          updates.scaleY = 1;
+
+          // For lines, calculate the new stroke width based on scaling
+          // Use average of scaleX and scaleY for uniform stroke width scaling
+          const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+          const newStrokeWidth = shape.strokeWidth * avgScale;
+          updates.strokeWidth = newStrokeWidth;
+
+          // For lines, calculate width/height based on the scaled points span
+          // This ensures the line's bounding box is correct
+          const xs = [];
+          const ys = [];
+          for (let i = 0; i < scaledPoints.length; i += 2) {
+            xs.push(scaledPoints[i]);
+            ys.push(scaledPoints[i + 1]);
+          }
+
+          if (xs.length > 0 && ys.length > 0) {
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+
+            const calculatedWidth = Math.abs(maxX - minX) || 1;
+            const calculatedHeight = Math.abs(maxY - minY) || 1;
+
+            updates.width = calculatedWidth;
+            updates.height = calculatedHeight;
+
+            // Update the node's width/height to match the calculated dimensions
+            node.width(calculatedWidth);
+            node.height(calculatedHeight);
+          }
+
+          // Reset scale to 1 and update node for immediate visual feedback
+          node.scaleX(1);
+          node.scaleY(1);
+          node.points(scaledPoints);
+          node.strokeWidth(newStrokeWidth);
+
+        } else if (shape.type === SHAPE_TYPES.TEXT || shape.type === SHAPE_TYPES.IMAGE) {
+          // For text and images, preserve independent scaleX and scaleY for distortion/resizing
+          updates.scaleX = node.scaleX();
+          updates.scaleY = node.scaleY();
         }
 
-        // Apply scale to each point coordinate
-        const scaledPoints = [];
-        for (let i = 0; i < originalPoints.length; i += 2) {
-          scaledPoints.push(originalPoints[i] * scaleX);      // x coordinate
-          scaledPoints.push(originalPoints[i + 1] * scaleY);  // y coordinate
-        }
-
-        updates.points = scaledPoints;
-        // Reset scale to 1 since we baked it into the points
-        updates.scaleX = 1;
-        updates.scaleY = 1;
-
-        // For lines, calculate the new stroke width based on scaling
-        // Use average of scaleX and scaleY for uniform stroke width scaling
-        const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
-        const newStrokeWidth = shape.strokeWidth * avgScale;
-        updates.strokeWidth = newStrokeWidth;
-
-        // For lines, calculate width/height based on the scaled points span
-        // This ensures the line's bounding box is correct
-        const xs = [];
-        const ys = [];
-        for (let i = 0; i < scaledPoints.length; i += 2) {
-          xs.push(scaledPoints[i]);
-          ys.push(scaledPoints[i + 1]);
-        }
-
-        if (xs.length > 0 && ys.length > 0) {
-          const minX = Math.min(...xs);
-          const maxX = Math.max(...xs);
-          const minY = Math.min(...ys);
-          const maxY = Math.max(...ys);
-
-          const calculatedWidth = Math.abs(maxX - minX) || 1;
-          const calculatedHeight = Math.abs(maxY - minY) || 1;
-
-          updates.width = calculatedWidth;
-          updates.height = calculatedHeight;
-
-          // Update the node's width/height to match the calculated dimensions
-          node.width(calculatedWidth);
-          node.height(calculatedHeight);
-        }
-
-        // Reset scale to 1 and update node for immediate visual feedback
-        node.scaleX(1);
-        node.scaleY(1);
-        node.points(scaledPoints);
-        node.strokeWidth(newStrokeWidth);
-
-      } else if (shape.type === SHAPE_TYPES.TEXT || shape.type === SHAPE_TYPES.IMAGE) {
-        // For text and images, preserve independent scaleX and scaleY for distortion/resizing
-        updates.scaleX = node.scaleX();
-        updates.scaleY = node.scaleY();
+        // Store for batch update
+        allPreviousStates.push({ id: shapeId, updates: previousState });
+        allNewStates.push({ id: shapeId, updates });
+        updatesToApply.push({ id: shapeId, ...updates });
       }
 
-      // Update shape in Firestore
-      await updateShapes(transformedShapeId, updates);
+      // Batch update all shapes in Firestore
+      if (updatesToApply.length > 0) {
+        await updateShapes(updatesToApply);
 
-      // Add to history
-      addToHistory({
-        type: ACTION_TYPES.UPDATE,
-        data: {
-          shapeIds: [transformedShapeId],
-          previousStates: [{ id: transformedShapeId, updates: previousState }],
-          newStates: [{ id: transformedShapeId, updates }]
-        }
-      });
+        // Add to history
+        addToHistory({
+          type: ACTION_TYPES.UPDATE,
+          data: {
+            shapeIds: selectedShapeIds,
+            previousStates: allPreviousStates,
+            newStates: allNewStates
+          }
+        });
+      }
       
     } catch (err) {
     } finally {
@@ -786,6 +798,14 @@ function Canvas() {
         selectedShapeIds={selectedShapeIds}
         deleteShape={deleteShape}
         selectShape={selectShape}
+      />
+
+      <PropertiesPanel
+        selectedShapeIds={selectedShapeIds}
+        shapes={shapes}
+        updateShapes={updateShapes}
+        isLockedByOther={isLockedByOther}
+        addToHistory={addToHistory}
       />
 
       <Stage

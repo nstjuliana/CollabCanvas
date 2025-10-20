@@ -195,7 +195,7 @@ This project is licensed under the MIT License.
 
 ## 🔗 Links
 
-- [Live Demo](https://your-deployment-url.vercel.app)
+- [Live Demo](https://collab-canvas-lilac.vercel.app/)
 - [Product Requirements Document](prd.md)
 
 ---

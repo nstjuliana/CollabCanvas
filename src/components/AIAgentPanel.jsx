@@ -185,44 +185,61 @@ function AIAgentPanel({ shapes, selectedShapeIds = [], deleteShape, selectShape 
                 </ul>
               </div>
             ) : (
-              history.map((entry, index) => (
-                <div 
-                  key={index} 
-                  className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''} ${entry.streaming ? 'ai-message-streaming' : ''}`}
-                >
-                  <div className="ai-message-content">
-                    {entry.content || (entry.streaming ? '...' : '')}
-                    {entry.streaming && <span className="ai-cursor">▊</span>}
-                  </div>
-                  {entry.toolCalls && entry.toolCalls.length > 0 && (
-                    <div className="ai-message-details">
-                      {entry.toolCalls.map((toolCall, i) => (
-                        <div key={i} className="ai-detail">
-                          <code>{toolCall.function}</code>
-                          {toolCall.result && (
-                            <span className="ai-detail-result">
-                              {Array.isArray(toolCall.result) 
-                                ? `(${toolCall.result.length} ${toolCall.result.length === 1 ? 'item' : 'items'})`
-                                : typeof toolCall.result === 'string'
-                                ? '✓'
-                                : JSON.stringify(toolCall.result).substring(0, 50)
-                              }
-                            </span>
-                          )}
-                        </div>
-                      ))}
+              history.map((entry, index) => {
+                // Don't show empty streaming messages - the loading indicator will show instead
+                if (entry.streaming && !entry.content && (!entry.toolCalls || entry.toolCalls.length === 0)) {
+                  return null;
+                }
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''} ${entry.streaming ? 'ai-message-streaming' : ''}`}
+                  >
+                    <div className="ai-message-content">
+                      {entry.content}
+                      {entry.streaming && entry.content && <span className="ai-cursor">▊</span>}
                     </div>
-                  )}
-                </div>
-              ))
+                    {entry.toolCalls && entry.toolCalls.length > 0 && (
+                      <div className="ai-message-details">
+                        {entry.toolCalls.map((toolCall, i) => (
+                          <div key={i} className="ai-detail">
+                            <code>{toolCall.function}</code>
+                            {toolCall.result && (
+                              <span className="ai-detail-result">
+                                {Array.isArray(toolCall.result) 
+                                  ? `(${toolCall.result.length} ${toolCall.result.length === 1 ? 'item' : 'items'})`
+                                  : typeof toolCall.result === 'string'
+                                  ? '✓'
+                                  : JSON.stringify(toolCall.result).substring(0, 50)
+                                }
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
-            {isProcessing && (
-              <div className="ai-message ai-message-agent ai-message-loading">
-                <div className="ai-loading-dots">
-                  <span>.</span><span>.</span><span>.</span>
+            {isProcessing && (() => {
+              // Hide loading indicator if the last message is streaming and has content or tool calls
+              const lastMessage = history[history.length - 1];
+              const hasStreamingContent = lastMessage?.streaming && (lastMessage?.content || (lastMessage?.toolCalls && lastMessage?.toolCalls.length > 0));
+              
+              if (hasStreamingContent) {
+                return null;
+              }
+              
+              return (
+                <div className="ai-message ai-message-agent ai-message-loading">
+                  <div className="ai-loading-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Example commands */}

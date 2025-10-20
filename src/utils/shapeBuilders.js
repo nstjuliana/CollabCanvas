@@ -145,6 +145,7 @@ export function normalizeColor(color) {
     'yellow': '#F7DC6F',
     'orange': '#F8B739',
     'purple': '#BB8FCE',
+    'violet': '#BB8FCE',
     'pink': '#FF8ED4',
     'teal': '#4ECDC4',
     'mint': '#98D8C8',
@@ -155,10 +156,49 @@ export function normalizeColor(color) {
     'white': '#FFFFFF',
     'gray': '#999999',
     'grey': '#999999',
+    'cyan': '#00CED1',
+    'magenta': '#FF00FF',
+    'brown': '#8B4513',
+    'gold': '#FFD700',
+    'silver': '#C0C0C0',
   };
   
-  const normalized = color.toLowerCase().replace(/\s+/g, '');
-  return colorMap[normalized] || color;
+  // Normalize: lowercase and remove spaces
+  let normalized = color.toLowerCase().replace(/\s+/g, '');
+  
+  // Try exact match first
+  if (colorMap[normalized]) {
+    return colorMap[normalized];
+  }
+  
+  // Extract base color from descriptive phrases like "vibrant purple", "dark red", "light blue"
+  // Common modifiers to strip
+  const modifiers = ['light', 'dark', 'vibrant', 'bright', 'pale', 'deep', 'vivid', 'dull', 'pastel', 'bold', 'soft'];
+  
+  for (const modifier of modifiers) {
+    if (normalized.startsWith(modifier)) {
+      const baseColor = normalized.slice(modifier.length);
+      if (colorMap[baseColor]) {
+        return colorMap[baseColor];
+      }
+    }
+    if (normalized.endsWith(modifier)) {
+      const baseColor = normalized.slice(0, -modifier.length);
+      if (colorMap[baseColor]) {
+        return colorMap[baseColor];
+      }
+    }
+  }
+  
+  // If still not found, check if any base color name is contained in the string
+  for (const [colorName, hexValue] of Object.entries(colorMap)) {
+    if (normalized.includes(colorName)) {
+      return hexValue;
+    }
+  }
+  
+  // If nothing matches, return the original color (might be a valid CSS color name)
+  return color;
 }
 
 /**

@@ -9,6 +9,7 @@ import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import * as agentActions from './agentActions';
 import { buildShapeObject } from '../utils/shapeBuilders';
+import { createShapes as createShapesService } from './shapes';
 
 /**
  * Legacy tool definitions array (kept for reference)
@@ -443,7 +444,7 @@ export async function processAgentCommand(userCommand, shapes, selectedShapeIds 
             type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']),
             x: z.number(),
             y: z.number(),
-            color: z.string().optional(),
+            color: z.string().optional().describe('Hex color (e.g., "#FF6B6B"). MUST start with #. NEVER use color names.'),
             width: z.number().optional(),
             height: z.number().optional(),
             text: z.string().optional(),
@@ -453,11 +454,16 @@ export async function processAgentCommand(userCommand, shapes, selectedShapeIds 
         }),
         execute: async ({ shapes: shapesToCreate }) => {
           // Build shape objects using the shared builder
+          console.log('🔧 createShapes tool called with:', JSON.stringify(shapesToCreate, null, 2));
           const shapeObjects = shapesToCreate.map(s => {
             const { type, x, y, ...properties } = s;
-            return buildShapeObject(type, x, y, properties);
+            console.log(`  Building ${type} at (${x}, ${y}) with properties:`, properties);
+            const built = buildShapeObject(type, x, y, properties);
+            console.log(`  Built shape:`, { width: built.width, height: built.height, fill: built.fill });
+            return built;
           });
-          const result = await agentActions.createShapes(shapeObjects);
+          // Pass built shapes directly to service (don't use agentActions.createShapes which would build them again!)
+          const result = await createShapesService(shapeObjects);
           if (onToolCall) onToolCall({ function: 'createShapes', args: { shapes: shapesToCreate }, result });
           const shapeIds = Array.isArray(result) ? result : [result];
           return { success: true, shapeIds, count: shapeIds.length };
@@ -496,7 +502,7 @@ export async function processAgentCommand(userCommand, shapes, selectedShapeIds 
         description: 'Change the color of a single shape. You MUST call findShapes first to get the shape ID.',
         inputSchema: z.object({
           shapeId: z.string().describe('Shape ID from findShapes result'),
-          color: z.string().describe('New color (hex or color name)'),
+          color: z.string().describe('New hex color (e.g., "#FF6B6B"). MUST start with #.'),
         }),
         execute: async ({ shapeId, color }) => {
           const result = await agentActions.changeShapeColor(shapeId, color);
@@ -510,7 +516,7 @@ export async function processAgentCommand(userCommand, shapes, selectedShapeIds 
         inputSchema: z.object({
           updates: z.array(z.object({
             shapeId: z.string().describe('Shape ID from findShapes or getActiveShapes'),
-            color: z.string().optional().describe('New color'),
+            color: z.string().optional().describe('New hex color (e.g., "#FF6B6B"). MUST start with #.'),
             x: z.number().optional().describe('New X position'),
             y: z.number().optional().describe('New Y position'),
             width: z.number().optional().describe('New width'),
@@ -576,15 +582,36 @@ CANVAS INFORMATION:
 - Center: (2500, 2500)
 - Coordinates: X increases right, Y increases down
 
+COLORS - ALWAYS use hex format (e.g., "#FF6B6B"):
+Common hex colors to use:
+- red: #FF6B6B
+- blue: #45B7D1
+- green: #52B788
+- yellow: #F7DC6F
+- orange: #F8B739
+- purple: #BB8FCE
+- pink: #FF8ED4
+- teal: #4ECDC4
+- cyan: #00CED1
+- magenta: #FF00FF
+- black: #000000
+- white: #FFFFFF
+- gray: #999999
+- brown: #8B4513
+- gold: #FFD700
+
+IMPORTANT: ALWAYS use hex format (starting with #) for colors. NEVER use color names or descriptive phrases.
+
 DEFAULTS - Use these when user doesn't specify:
 - Position: Center (2500, 2500) or random if multiple
-- Size: 
-  - "tiny" = 30-50px
-  - "small" = 80-100px
-  - "normal" = 100-150px (default)
-  - "large" = 200-300px
-  - "huge"/"gigantic" = 400-500px
-- Color: User's color name or pick a vibrant color
+- Size (canvas is 5000x5000, be generous with sizes!): 
+  - "tiny" = 50-100px
+  - "small" = 150-250px
+  - "normal" = 300-400px (default)
+  - "large" = 500-700px
+  - "huge"/"gigantic"/"massive" = 800-1200px
+  - "enormous" = 1500-2000px
+- Color: Use hex from list above, or pick any vibrant hex color
 - NEVER ask for clarification - make reasonable choices!
 
 POSITIONAL REFERENCE:
@@ -637,7 +664,7 @@ Step 2: moveShapeTo({shapeId: "s1", x: 2500, y: 250})
 User: "Change the selected shape to red"
 Step 1: getActiveShapes()
        → Get: [{id: "s1", ...}]
-Step 2: changeShapeColor({shapeId: "s1", color: "red"})
+Step 2: changeShapeColor({shapeId: "s1", color: "#FF6B6B"})
 
 User: "Move the blue square to the top"
 Step 1: findShapes({criteria: {type: "rectangle", color: "blue"}})
@@ -658,7 +685,7 @@ Step 2: Loop through results and call deleteShape for each ID
 User: "Change the green star to blue"
 Step 1: findShapes({criteria: {type: "star", color: "green"}})
 Step 2: Extract shapes[0].id
-Step 3: changeShapeColor({shapeId: shapes[0].id, color: "blue"})
+Step 3: changeShapeColor({shapeId: shapes[0].id, color: "#45B7D1"})
 
 User: "Move any square 100px right"
 Step 1: findShapes({criteria: {type: "rectangle"}})
@@ -676,30 +703,30 @@ BATCH OPERATIONS (pass arrays):
 
 User: "Create a red circle at 500, 500"
 Step 1: createShapes({shapes: [
-  {type: "circle", x: 500, y: 500, color: "red"}
+  {type: "circle", x: 500, y: 500, color: "#FF6B6B"}
 ]})
 
 User: "Create a gigantic pink star"
 Step 1: createShapes({shapes: [
-  {type: "star", x: 2500, y: 2500, color: "pink", width: 400, height: 400}
+  {type: "star", x: 2500, y: 2500, color: "#FF8ED4", width: 1000, height: 1000}
 ]})
-// Used center position and 400px for "gigantic"
+// Used center position and 1000px for "gigantic" (canvas is 5000x5000)
 
 User: "Create 5 blue circles in a row"
 Step 1: createShapes({shapes: [
-  {type: "circle", x: 100, y: 500, color: "blue"},
-  {type: "circle", x: 300, y: 500, color: "blue"},
-  {type: "circle", x: 500, y: 500, color: "blue"},
-  {type: "circle", x: 700, y: 500, color: "blue"},
-  {type: "circle", x: 900, y: 500, color: "blue"}
+  {type: "circle", x: 100, y: 500, color: "#45B7D1"},
+  {type: "circle", x: 300, y: 500, color: "#45B7D1"},
+  {type: "circle", x: 500, y: 500, color: "#45B7D1"},
+  {type: "circle", x: 700, y: 500, color: "#45B7D1"},
+  {type: "circle", x: 900, y: 500, color: "#45B7D1"}
 ]})
 
 User: "Change all active shapes to red"
 Step 1: getActiveShapes() → [{id: "s1"}, {id: "s2"}, {id: "s3"}]
 Step 2: updateMultipleShapes({updates: [
-  {shapeId: "s1", color: "red"},
-  {shapeId: "s2", color: "red"},
-  {shapeId: "s3", color: "red"}
+  {shapeId: "s1", color: "#FF6B6B"},
+  {shapeId: "s2", color: "#FF6B6B"},
+  {shapeId: "s3", color: "#FF6B6B"}
 ]})
 
 User: "Delete all red circles"
@@ -720,7 +747,8 @@ IMPORTANT:
 - Handle "all" (plural) by processing all results
 - NEVER ask for clarification - use sensible defaults
 - Be decisive and proactive
-- Confirm what you did after completion`,
+- Be CONCISE - don't explain what you're about to do, just do it
+- NO lengthy explanations, NO step-by-step descriptions"`,
         },
         {
           role: 'user',

@@ -5,8 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  createShape as createShapeService,
-  createMultipleShapes as createMultipleShapesService,
+  createShapes as createShapesService,
   updateShape as updateShapeService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
@@ -93,36 +92,24 @@ function useShapes(presence = {}) {
   }, [presence]);
 
   /**
-   * Create a new shape
-   * @param {object} shapeData - Shape properties
-   * @returns {Promise<string>} Created shape ID
+   * Create one or more shapes
+   * @param {object|Array<object>} shapeData - Single shape or array of shapes
+   * @returns {Promise<string|Array<string>>} Created shape ID(s)
    */
-  const createShape = useCallback(async (shapeData) => {
+  const createShapes = useCallback(async (shapeData) => {
     try {
       setError(null);
-      const shapeId = await createShapeService(shapeData);
-      return shapeId;
+      const result = await createShapesService(shapeData);
+      return result;
     } catch (err) {
       setError(err.message);
       throw err;
     }
   }, []);
 
-  /**
-   * Create multiple shapes at once (batch operation)
-   * @param {Array<object>} shapesData - Array of shape properties
-   * @returns {Promise<Array<string>>} Array of created shape IDs
-   */
-  const createMultipleShapes = useCallback(async (shapesData) => {
-    try {
-      setError(null);
-      const shapeIds = await createMultipleShapesService(shapesData);
-      return shapeIds;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    }
-  }, []);
+  // Backward compatibility aliases
+  const createShape = createShapes;
+  const createMultipleShapes = createShapes;
 
   /**
    * Update an existing shape
@@ -400,8 +387,9 @@ function useShapes(presence = {}) {
     selectedShapeId: selectedShapeIds[0] || null, // For backward compatibility
     
     // Methods
-    createShape,
-    createMultipleShapes,
+    createShapes,           // Unified create function (1 or many)
+    createShape,            // Alias for backward compatibility
+    createMultipleShapes,   // Alias for backward compatibility
     updateShape,
     deleteShape,
     deleteMultipleShapes,

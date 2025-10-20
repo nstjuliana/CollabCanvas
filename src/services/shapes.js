@@ -25,12 +25,28 @@ import { generateId } from '../utils/helpers';
 import { SHAPE_DEFAULTS, DEFAULT_SHAPE_COLOR, SHAPE_TYPES } from '../utils/constants';
 
 /**
- * Create a new shape in Firestore
+ * Create one or more shapes in Firestore
+ * @param {object|Array<object>} shapeData - Single shape or array of shapes
+ * @returns {Promise<string|Array<string>>} Created shape ID(s)
+ * @throws {Error} Firestore error
+ */
+export async function createShapes(shapeData) {
+  // Handle array of shapes - use batch write
+  if (Array.isArray(shapeData)) {
+    return await createMultipleShapesInternal(shapeData);
+  }
+  
+  // Handle single shape
+  return await createSingleShapeInternal(shapeData);
+}
+
+/**
+ * Internal: Create a single shape in Firestore
  * @param {object} shapeData - Shape properties (x, y, width, height, fill, etc.)
  * @returns {Promise<string>} Created shape ID
  * @throws {Error} Firestore error
  */
-export async function createShape(shapeData) {
+async function createSingleShapeInternal(shapeData) {
   try {
     const userId = getUserId();
     if (!userId) {
@@ -104,12 +120,12 @@ export async function createShape(shapeData) {
 }
 
 /**
- * Create multiple shapes at once using batch write
+ * Internal: Create multiple shapes at once using batch write
  * @param {Array<object>} shapesData - Array of shape properties
  * @returns {Promise<Array<string>>} Array of created shape IDs
  * @throws {Error} Firestore error
  */
-export async function createMultipleShapes(shapesData) {
+async function createMultipleShapesInternal(shapesData) {
   try {
     const userId = getUserId();
     if (!userId) {
@@ -188,6 +204,10 @@ export async function createMultipleShapes(shapesData) {
     throw new Error(`Failed to create shapes: ${error.message}`);
   }
 }
+
+// Backward compatibility exports
+export const createShape = createShapes; // Alias for single shape
+export const createMultipleShapes = createShapes; // Alias for multiple shapes
 
 /**
  * Update an existing shape in Firestore

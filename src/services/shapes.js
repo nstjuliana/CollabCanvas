@@ -205,9 +205,6 @@ async function createMultipleShapesInternal(shapesData) {
   }
 }
 
-// Backward compatibility exports
-export const createShape = createShapes; // Alias for single shape
-export const createMultipleShapes = createShapes; // Alias for multiple shapes
 
 /**
  * Update an existing shape in Firestore

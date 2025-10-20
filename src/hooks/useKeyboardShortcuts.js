@@ -16,8 +16,7 @@ const useKeyboardShortcuts = ({
   addToHistory,
   handleUndo,
   handleRedo,
-  createShape,
-  createMultipleShapes,
+  createShapes,
   selectShapes
 }) => {
   // Clipboard for copy/paste
@@ -39,7 +38,6 @@ const useKeyboardShortcuts = ({
         
         if (shapesToCopy.length > 0) {
           clipboardRef.current = shapesToCopy;
-          console.log(`Copied ${shapesToCopy.length} shape(s)`);
         }
         return;
       }
@@ -49,7 +47,7 @@ const useKeyboardShortcuts = ({
         e.preventDefault();
         
         const offset = 20; // Offset for pasted shapes
-        const activeShape = shapes.find(s => s.id === selectedShapeIds[0]).getCoordinates();
+        const activeShape = shapes.find(s => s.id === selectedShapeIds[0]);
 
         try {
           // Prepare all shapes for batch creation
@@ -62,16 +60,10 @@ const useKeyboardShortcuts = ({
             };
           });
 
-          // Use batch creation if pasting multiple shapes, otherwise use single create
-          let newShapeIds;
-          if (shapesToCreate.length > 1) {
-            // Batch create for multiple shapes - much faster!
-            newShapeIds = await createMultipleShapes(shapesToCreate);
-          } else {
-            // Single create for one shape
-            const shapeId = await createShape(shapesToCreate[0]);
-            newShapeIds = [shapeId];
-          }
+          // Use createShapes - automatically handles single or multiple
+          const result = await createShapes(shapesToCreate);
+          // Normalize to array
+          const newShapeIds = Array.isArray(result) ? result : [result];
 
           // Select the newly pasted shapes
           if (newShapeIds.length > 0) {
@@ -96,7 +88,6 @@ const useKeyboardShortcuts = ({
               });
             }
             
-            console.log(`Pasted ${pastedShapes.length} shape(s) using ${shapesToCreate.length > 1 ? 'batch write' : 'single write'}`);
           }
         } catch (err) {
           console.error('Error pasting shapes:', err);
@@ -239,8 +230,7 @@ const useKeyboardShortcuts = ({
     addToHistory,
     handleUndo,
     handleRedo,
-    createShape,
-    createMultipleShapes,
+    createShapes,
     selectShapes
   ]);
 };

@@ -8,7 +8,7 @@
  */
 
 import {
-  createShape as createShapeService,
+  createShapes as createShapesService,
   updateShape as updateShapeService,
   deleteShape as deleteShapeService,
   getShape,
@@ -110,26 +110,21 @@ export function findShapes(shapes, criteria = {}) {
  * @param {number} properties.rotation - Rotation in degrees
  * @returns {Promise<string>} Created shape ID
  */
-export async function createShape(type, x, y, properties = {}) {
-  const shapeData = buildShapeObject(type, x, y, properties);
-  const shapeId = await createShapeService(shapeData);
-  return shapeId;
+export async function createShapes(typeOrShapes, x, y, properties = {}) {
+  // Handle array of shapes - batch creation
+  if (Array.isArray(typeOrShapes)) {
+    const shapeObjects = buildMultipleShapeObjects(typeOrShapes);
+    return await createShapesService(shapeObjects);
+  }
+  
+  // Handle single shape
+  const shapeData = buildShapeObject(typeOrShapes, x, y, properties);
+  return await createShapesService(shapeData);
 }
 
-/**
- * Create multiple shapes at once
- * @param {Array<Object>} shapes - Array of shape definitions
- * @param {string} shapes[].type - Shape type
- * @param {number} shapes[].x - X position
- * @param {number} shapes[].y - Y position
- * @param {Object} shapes[].properties - Additional properties
- * @returns {Promise<Array<string>>} Array of created shape IDs
- */
-export async function createMultipleShapes(shapes) {
-  const shapeObjects = buildMultipleShapeObjects(shapes);
-  const promises = shapeObjects.map(shapeData => createShapeService(shapeData));
-  return await Promise.all(promises);
-}
+// Backward compatibility aliases
+export const createShape = createShapes;
+export const createMultipleShapes = (shapes) => createShapes(shapes);
 
 /**
  * Delete a shape by ID

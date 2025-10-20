@@ -12,7 +12,7 @@ const useShapeManipulation = ({
   selectedColor,
   shapes,
   isLockedByOther,
-  createShape,
+  createShapes,
   deleteShape,
   selectShape,
   selectShapes,
@@ -61,7 +61,7 @@ const useShapeManipulation = ({
 
       // Use shared shape builder - ONE source of truth!
       const newShape = buildShapeObject(selectedTool, x, y, properties);
-      const shapeId = await createShape(newShape);
+      const shapeId = await createShapes(newShape);
 
       // Add to history
       addToHistory({

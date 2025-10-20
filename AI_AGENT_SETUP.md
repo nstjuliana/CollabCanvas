@@ -297,7 +297,6 @@ await agent.createShape('rectangle', 100, 100, { color: 'blue' });
 
 // Find it
 const blueShapes = agent.findShapes({ color: 'blue' });
-console.log(blueShapes);
 
 // Move it
 await agent.moveShapeBy(blueShapes[0].id, 50, 0);

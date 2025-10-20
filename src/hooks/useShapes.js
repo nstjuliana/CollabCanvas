@@ -107,9 +107,6 @@ function useShapes(presence = {}) {
     }
   }, []);
 
-  // Backward compatibility aliases
-  const createShape = createShapes;
-  const createMultipleShapes = createShapes;
 
   /**
    * Update an existing shape
@@ -388,8 +385,6 @@ function useShapes(presence = {}) {
     
     // Methods
     createShapes,           // Unified create function (1 or many)
-    createShape,            // Alias for backward compatibility
-    createMultipleShapes,   // Alias for backward compatibility
     updateShape,
     deleteShape,
     deleteMultipleShapes,

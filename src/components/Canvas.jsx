@@ -51,8 +51,7 @@ function Canvas() {
     error,
     selectedShapeIds,
     selectedShapeId,
-    createShape,
-    createMultipleShapes,
+    createShapes,
     updateShape,
     deleteShape,
     deleteMultipleShapes,
@@ -94,7 +93,7 @@ function Canvas() {
     canUndo,
     canRedo,
     shapes,
-    createShape,
+    createShapes,
     deleteShape,
     deleteMultipleShapes,
     selectShape,
@@ -118,8 +117,7 @@ function Canvas() {
     addToHistory,
     handleUndo,
     handleRedo,
-    createShape,
-    createMultipleShapes,
+    createShapes,
     selectShapes
   });
 
@@ -162,7 +160,7 @@ function Canvas() {
 
       // Use shared shape builder - ONE source of truth!
       const newShape = buildShapeObject(selectedTool, x, y, properties);
-      const shapeId = await createShape(newShape);
+      const shapeId = await createShapes(newShape);
 
       // Add to history
       addToHistory({
@@ -218,7 +216,7 @@ function Canvas() {
     selectedColor,
     shapes,
     isLockedByOther,
-    createShape,
+    createShapes,
     deleteShape,
     selectShape,
     selectShapes,
@@ -267,7 +265,7 @@ function Canvas() {
   } = useImageUpload({
     stageRef,
     containerRef,
-    createShape,
+    createShapes,
     selectShape,
     addToHistory
   });

@@ -10,7 +10,7 @@ import { ACTION_TYPES } from './useUndoRedo';
 const useImageUpload = ({
   stageRef,
   containerRef,
-  createShape,
+  createShapes,
   selectShape,
   addToHistory
 }) => {
@@ -98,7 +98,7 @@ const useImageUpload = ({
           scaleY: 1,
         };
 
-        const shapeId = await createShape(newShape);
+        const shapeId = await createShapes(newShape);
 
         // Add to history
         addToHistory({

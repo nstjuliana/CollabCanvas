@@ -20,8 +20,6 @@ function ShapesLayer({
   isEditingText,
   editingShapeId
 }) {
-  // Debug: Log presence data once
-  console.log('[ShapesLayer] Presence data:', presence, 'Shapes with locks:', shapes.filter(s => s.lockedBy).length);
   
   return (
     <Layer>
@@ -39,16 +37,6 @@ function ShapesLayer({
         
         // Show name tag only if locked by another user (not by current user)
         const showNameTag = isLockedByOther(shape.id) && lockerName;
-        
-        // Debug locked shapes
-        if (shape.lockedBy) {
-          console.log(`[ShapesLayer] Shape ${shape.id} locked by ${shape.lockedBy}:`, {
-            lockedByUser,
-            lockerName,
-            showNameTag,
-            isLockedByOther: isLockedByOther(shape.id)
-          });
-        }
         
         return (
           <Shape

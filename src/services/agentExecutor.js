@@ -308,7 +308,7 @@ export async function executeFunctionCall(functionName, args, shapes) {
         return agentActions.findShapes(shapes, args.criteria || {});
       
       case 'createShape':
-        return await agentActions.createShape(args.type, args.x, args.y, args.properties || {});
+        return await agentActions.createShapes(args.type, args.x, args.y, args.properties || {});
       
       case 'createGrid':
         return await agentActions.createGrid(
@@ -430,7 +430,7 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
           }).optional(),
         }),
         execute: async ({ type, x, y, properties }) => {
-          const result = await agentActions.createShape(type, x, y, properties || {});
+          const result = await agentActions.createShapes(type, x, y, properties || {});
           if (onToolCall) onToolCall({ function: 'createShape', args: { type, x, y, properties }, result });
           return result;
         },

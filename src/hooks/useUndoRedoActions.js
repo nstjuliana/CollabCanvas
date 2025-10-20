@@ -8,7 +8,7 @@ const useUndoRedoActions = ({
   canUndo,
   canRedo,
   shapes,
-  createShape,
+  createShapes,
   deleteShape,
   deleteMultipleShapes,
   selectShape,
@@ -60,8 +60,8 @@ const useUndoRedoActions = ({
           // Undo delete by recreating the shape
           const { shape } = action.data;
           // Remove id and locks to create fresh shape
-          const { id, lockedBy, lockedAt, ...shapeData } = shape;
-          const newShapeId = await createShape(shapeData);
+          const { id, lockedBy, lockedAt, ...shapeData} = shape;
+          const newShapeId = await createShapes(shapeData);
           // Map old ID to new ID
           undoRedoIdMap.current[id] = newShapeId;
           // Auto-select the restored shape
@@ -75,7 +75,7 @@ const useUndoRedoActions = ({
           const newShapeIds = [];
           for (const shape of deletedShapes) {
             const { id, lockedBy, lockedAt, ...shapeData } = shape;
-            const newShapeId = await createShape(shapeData);
+            const newShapeId = await createShapes(shapeData);
             // Map old ID to new ID
             undoRedoIdMap.current[id] = newShapeId;
             newShapeIds.push(newShapeId);
@@ -132,7 +132,7 @@ const useUndoRedoActions = ({
           // Redo create by creating the shape again
           const { shapeData, shapeId: originalId } = action.data;
           if (shapeData) {
-            const newShapeId = await createShape(shapeData);
+            const newShapeId = await createShapes(shapeData);
             // Map original ID to new ID
             undoRedoIdMap.current[originalId] = newShapeId;
             // Auto-select the recreated shape

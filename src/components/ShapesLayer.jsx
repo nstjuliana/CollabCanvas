@@ -3,6 +3,7 @@ import Shape from './Shape';
 
 function ShapesLayer({
   shapes,
+  shapeLocks,
   selectedShapeIds,
   isLockedByOther,
   presence,
@@ -30,8 +31,9 @@ function ShapesLayer({
           return null;
         }
         
-        // Get the color and name of the user who locked this shape
-        const lockedByUser = shape.lockedBy ? presence[shape.lockedBy] : null;
+        // Get lock data from RTDB (shapeLocks prop) instead of shape object
+        const lockData = shapeLocks[shape.id];
+        const lockedByUser = lockData ? presence[lockData.userId] : null;
         const lockerColor = lockedByUser?.color || null;
         const lockerName = lockedByUser?.displayName || null;
         

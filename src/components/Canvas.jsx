@@ -47,6 +47,7 @@ function Canvas() {
 
   const {
     shapes,
+    shapeLocks,
     loading,
     error,
     selectedShapeIds,
@@ -814,6 +815,7 @@ function Canvas() {
 
         <ShapesLayer
           shapes={shapes}
+          shapeLocks={shapeLocks}
           selectedShapeIds={selectedShapeIds}
           isLockedByOther={isLockedByOther}
           presence={presence}

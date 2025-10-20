@@ -9,14 +9,17 @@ import {
   updateShapes as updateShapesService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
-  clearAllLocks as clearAllLocksService,
   subscribeToShapes,
+} from '../services/shapes';
+import {
   lockShapes as lockShapesService,
   unlockShapes as unlockShapesService,
   unlockShapesForUser,
-  isShapeLockedByOther,
-  isShapeLockedByMe,
-} from '../services/shapes';
+  clearAllLocks as clearAllLocksService,
+  subscribeToShapeLocks,
+  isShapeLockedByOther as isShapeLockedByOtherRTDB,
+  isShapeLockedByMe as isShapeLockedByMeRTDB,
+} from '../services/shapeLocks';
 import { getUserId } from '../services/auth';
 
 /**
@@ -26,15 +29,17 @@ import { getUserId } from '../services/auth';
  */
 function useShapes(presence = {}) {
   const [shapes, setShapes] = useState([]);
+  const [shapeLocks, setShapeLocks] = useState({}); // RTDB lock data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedShapeIds, setSelectedShapeIds] = useState([]);
   
   const unsubscribeRef = useRef(null);
+  const unsubscribeLocksRef = useRef(null);
   const userId = getUserId();
   const previousPresenceRef = useRef({});
 
-  // Subscribe to real-time shape updates - only once on mount
+  // Subscribe to real-time shape updates from Firestore - only once on mount
   useEffect(() => {
     const unsubscribe = subscribeToShapes((updatedShapes) => {
       setShapes(updatedShapes);
@@ -48,6 +53,22 @@ function useShapes(presence = {}) {
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
+      }
+    };
+  }, []); // Empty deps - subscription should persist for component lifetime
+
+  // Subscribe to real-time lock updates from RTDB - only once on mount
+  useEffect(() => {
+    const unsubscribe = subscribeToShapeLocks((locks) => {
+      setShapeLocks(locks);
+    });
+
+    unsubscribeLocksRef.current = unsubscribe;
+
+    // Cleanup subscription only on unmount
+    return () => {
+      if (unsubscribeLocksRef.current) {
+        unsubscribeLocksRef.current();
       }
     };
   }, []); // Empty deps - subscription should persist for component lifetime
@@ -315,26 +336,22 @@ function useShapes(presence = {}) {
   }, [selectShapes]);
 
   /**
-   * Check if a shape is locked by another user
+   * Check if a shape is locked by another user (using RTDB lock data)
    * @param {string} shapeId - Shape ID
    * @returns {boolean} True if locked by another user
    */
   const isLockedByOther = useCallback((shapeId) => {
-    const shape = shapes.find(s => s.id === shapeId);
-    if (!shape) return false;
-    return isShapeLockedByOther(shape, userId);
-  }, [shapes, userId]);
+    return isShapeLockedByOtherRTDB(shapeId, shapeLocks, userId);
+  }, [shapeLocks, userId]);
 
   /**
-   * Check if a shape is locked by the current user
+   * Check if a shape is locked by the current user (using RTDB lock data)
    * @param {string} shapeId - Shape ID
    * @returns {boolean} True if locked by current user
    */
   const isLockedByMe = useCallback((shapeId) => {
-    const shape = shapes.find(s => s.id === shapeId);
-    if (!shape) return false;
-    return isShapeLockedByMe(shape, userId);
-  }, [shapes, userId]);
+    return isShapeLockedByMeRTDB(shapeId, shapeLocks, userId);
+  }, [shapeLocks, userId]);
 
   /**
    * Get a shape by ID from local state
@@ -394,6 +411,7 @@ function useShapes(presence = {}) {
   return {
     // State
     shapes,
+    shapeLocks,     // RTDB lock data
     loading,
     error,
     selectedShapeIds,

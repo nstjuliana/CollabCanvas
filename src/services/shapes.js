@@ -54,14 +54,12 @@ export async function createShapes(shapeData) {
       // Use shared shape builder for consistency
       const baseShape = buildShapeObject(data.type, data.x, data.y, data);
 
-      // Add Firestore metadata
+      // Add Firestore metadata (locks are now in RTDB, not Firestore)
       const shape = {
         ...baseShape,
         createdBy: userId,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        lockedBy: null,
-        lockedAt: null,
       };
 
       // Add to batch
@@ -151,120 +149,25 @@ export async function deleteShape(shapeId) {
   }
 }
 
-/**
- * Lock one or more shapes for editing (prevents other users from editing)
- * @param {string|string[]} shapeIds - Shape ID(s) to lock
- * @returns {Promise<string[]>} Array of successfully locked shape IDs
- * @throws {Error} Firestore error
- */
-export async function lockShapes(shapeIds) {
-  try {
-    const userId = getUserId();
-    if (!userId) {
-      throw new Error('User must be authenticated to lock shapes');
-    }
+// Lock/unlock functions are now in shapeLocks.js (RTDB)
+// Re-export them here for backward compatibility
+export { 
+  lockShapes, 
+  unlockShapes,
+  clearAllLocks as clearAllShapeLocks,
+  unlockShapesForUser 
+} from './shapeLocks';
 
-    // Normalize to array
-    const idsArray = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
-    
-    // First, read all shapes to check lock status
-    const shapeRefs = idsArray.map(id => doc(db, COLLECTIONS.SHAPES, id));
-    const shapeDocs = await Promise.all(shapeRefs.map(ref => getDoc(ref)));
-    
-    // Filter to only shapes that can be locked
-    const lockableShapes = [];
-    shapeDocs.forEach((shapeDoc, index) => {
-      if (shapeDoc.exists()) {
-        const data = shapeDoc.data();
-        // Can lock if not locked, or locked by current user
-        if (!data.lockedBy || data.lockedBy === userId) {
-          lockableShapes.push(idsArray[index]);
-        }
-      }
-    });
+// Backward compatibility - single shape wrappers
+import { lockShapes as lockShapesRTDB, unlockShapes as unlockShapesRTDB } from './shapeLocks';
 
-    if (lockableShapes.length === 0) {
-      return [];
-    }
-
-    // Use batch write to lock all shapes at once
-    const batch = writeBatch(db);
-    lockableShapes.forEach(id => {
-      const shapeRef = doc(db, COLLECTIONS.SHAPES, id);
-      batch.update(shapeRef, {
-        lockedBy: userId,
-        lockedAt: serverTimestamp(),
-      });
-    });
-
-    await batch.commit();
-    return lockableShapes;
-  } catch (error) {
-    throw new Error(`Failed to lock shape(s): ${error.message}`);
-  }
-}
-
-// Backward compatibility - single shape
 export async function lockShape(shapeId) {
-  const locked = await lockShapes(shapeId);
+  const locked = await lockShapesRTDB(shapeId);
   return locked.length > 0;
 }
 
-/**
- * Unlock one or more shapes (allow other users to edit)
- * @param {string|string[]} shapeIds - Shape ID(s) to unlock
- * @returns {Promise<void>}
- * @throws {Error} Firestore error
- */
-export async function unlockShapes(shapeIds) {
-  try {
-    const userId = getUserId();
-    if (!userId) {
-      throw new Error('User must be authenticated to unlock shapes');
-    }
-
-    // Normalize to array
-    const idsArray = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
-    
-    // Read all shapes to check ownership
-    const shapeRefs = idsArray.map(id => doc(db, COLLECTIONS.SHAPES, id));
-    const shapeDocs = await Promise.all(shapeRefs.map(ref => getDoc(ref)));
-    
-    // Filter to only shapes that can be unlocked by this user
-    const unlockableShapes = [];
-    shapeDocs.forEach((shapeDoc, index) => {
-      if (shapeDoc.exists()) {
-        const data = shapeDoc.data();
-        // Can unlock if not locked, or locked by current user
-        if (!data.lockedBy || data.lockedBy === userId) {
-          unlockableShapes.push(idsArray[index]);
-        }
-      }
-    });
-
-    if (unlockableShapes.length === 0) {
-      return;
-    }
-
-    // Use batch write to unlock all shapes at once
-    const batch = writeBatch(db);
-    unlockableShapes.forEach(id => {
-      const shapeRef = doc(db, COLLECTIONS.SHAPES, id);
-      batch.update(shapeRef, {
-        lockedBy: null,
-        lockedAt: null,
-      });
-    });
-
-    await batch.commit();
-  } catch (error) {
-    // Don't throw error for unlock failures (graceful degradation)
-  }
-}
-
-// Backward compatibility - single shape
 export async function unlockShape(shapeId) {
-  await unlockShapes(shapeId);
+  await unlockShapesRTDB(shapeId);
 }
 
 /**
@@ -286,12 +189,12 @@ export function subscribeToShapes(callback) {
           const data = doc.data();
           
           // Convert Firestore Timestamps to JavaScript Date objects
+          // Note: lock data is now in RTDB, not Firestore
           shapes.push({
             id: doc.id,
             ...data,
             createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
             updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-            lockedAt: data.lockedAt instanceof Timestamp ? data.lockedAt.toDate() : data.lockedAt,
           });
         });
 
@@ -328,110 +231,21 @@ export async function getShape(shapeId) {
       ...data,
       createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : data.createdAt,
       updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : data.updatedAt,
-      lockedAt: data.lockedAt instanceof Timestamp ? data.lockedAt.toDate() : data.lockedAt,
     };
   } catch (error) {
     throw new Error(`Failed to get shape: ${error.message}`);
   }
 }
 
-/**
- * Check if a shape is locked by another user
- * @param {object} shape - Shape object
- * @param {string} currentUserId - Current user's ID
- * @returns {boolean} True if locked by another user
- */
-export function isShapeLockedByOther(shape, currentUserId) {
-  return shape.lockedBy && shape.lockedBy !== currentUserId;
-}
+// Lock checking functions are now in shapeLocks.js (RTDB)
+// Re-export them here for backward compatibility
+export { 
+  isShapeLockedByOther, 
+  isShapeLockedByMe 
+} from './shapeLocks';
 
-/**
- * Check if a shape is locked by the current user
- * @param {object} shape - Shape object
- * @param {string} currentUserId - Current user's ID
- * @returns {boolean} True if locked by current user
- */
-export function isShapeLockedByMe(shape, currentUserId) {
-  return shape.lockedBy === currentUserId;
-}
-
-/**
- * Clear all locks from all shapes (admin function)
- * Use this to fix orphaned locks when users disconnect unexpectedly
- * @returns {Promise<number>} Number of shapes unlocked
- */
-export async function clearAllLocks() {
-  try {
-    const userId = getUserId();
-    if (!userId) {
-      throw new Error('User must be authenticated to clear locks');
-    }
-
-    const shapesRef = collection(db, COLLECTIONS.SHAPES);
-    const q = query(shapesRef);
-    const snapshot = await getDocs(q);
-    
-    const batch = writeBatch(db);
-    let count = 0;
-
-    snapshot.forEach((doc) => {
-      const shape = doc.data();
-      if (shape.lockedBy) {
-        batch.update(doc.ref, {
-          lockedBy: null,
-          lockedAt: null,
-        });
-        count++;
-      }
-    });
-
-    await batch.commit();
-    return count;
-  } catch (error) {
-    throw new Error(`Failed to clear locks: ${error.message}`);
-  }
-}
-
-/**
- * Unlock all shapes locked by a specific user
- * @param {string} targetUserId - User ID whose locks to clear
- * @returns {Promise<number>} Number of shapes unlocked
- */
-export async function unlockShapesForUser(targetUserId) {
-  try {
-    if (!targetUserId) {
-      throw new Error('User ID is required to unlock shapes');
-    }
-
-    const shapesRef = collection(db, COLLECTIONS.SHAPES);
-    const snapshot = await getDocs(shapesRef);
-    
-    const batch = writeBatch(db);
-    let count = 0;
-    const unlockedShapeIds = [];
-
-    snapshot.forEach((doc) => {
-      const shape = doc.data();
-      if (shape.lockedBy === targetUserId) {
-        batch.update(doc.ref, {
-          lockedBy: null,
-          lockedAt: null,
-        });
-        count++;
-        unlockedShapeIds.push(doc.id);
-      }
-    });
-
-    if (count > 0) {
-      await batch.commit();
-    } else {
-    }
-    
-    return count;
-  } catch (error) {
-    throw new Error(`Failed to unlock shapes: ${error.message}`);
-  }
-}
+// clearAllLocks and unlockShapesForUser are now in shapeLocks.js (RTDB)
+// They are re-exported above
 
 /**
  * Unlock all shapes locked by the current user (cleanup on disconnect)

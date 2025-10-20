@@ -45,9 +45,9 @@ const COLOR_RANGES = {
   orange: { r: [200, 255], g: [80, 180], b: [0, 80] },
   yellow: { r: [200, 255], g: [200, 255], b: [0, 100] },
   green: { r: [0, 150], g: [100, 255], b: [0, 150] },
-  cyan: { r: [0, 150], g: [200, 255], b: [200, 255] },
-  aqua: { r: [0, 150], g: [200, 255], b: [200, 255] },
-  blue: { r: [0, 120], g: [0, 120], b: [128, 255] },
+  cyan: { r: [0, 150], g: [150, 255], b: [180, 255] },
+  aqua: { r: [0, 150], g: [150, 255], b: [180, 255] },
+  blue: { r: [0, 150], g: [0, 220], b: [128, 255] }, // Expanded to include cyan-ish blues
   purple: { r: [100, 200], g: [0, 100], b: [150, 255] },
   violet: { r: [100, 200], g: [0, 100], b: [150, 255] },
   pink: { r: [200, 255], g: [100, 180], b: [150, 220] },
@@ -58,7 +58,7 @@ const COLOR_RANGES = {
   white: { r: [220, 255], g: [220, 255], b: [220, 255] },
   magenta: { r: [180, 255], g: [0, 100], b: [180, 255] },
   fuchsia: { r: [180, 255], g: [0, 100], b: [180, 255] },
-  teal: { r: [0, 100], g: [100, 200], b: [100, 180] },
+  teal: { r: [0, 120], g: [100, 220], b: [100, 200] }, // More specific teal range
   olive: { r: [100, 180], g: [100, 180], b: [0, 80] },
   gold: { r: [200, 255], g: [160, 210], b: [0, 80] },
   beige: { r: [200, 245], g: [180, 220], b: [130, 180] },
@@ -184,6 +184,7 @@ export function buildShapeObject(type, x, y, properties = {}) {
     height: properties.height || SHAPE_DEFAULTS.HEIGHT,
     rotation: properties.rotation || 0,
     opacity: properties.opacity ?? SHAPE_DEFAULTS.OPACITY,
+    zIndex: properties.zIndex ?? SHAPE_DEFAULTS.ZINDEX,
   };
   
   // Add type-specific properties

@@ -17,6 +17,10 @@ function KeyboardShortcuts() {
     { key: 'Escape', action: 'Deselect' },
     { key: 'Delete', action: 'Delete shape' },
     { key: 'Arrow Keys', action: 'Nudge shape' },
+    { key: '[', action: 'Send backward' },
+    { key: ']', action: 'Bring forward' },
+    { key: 'Ctrl/Cmd + [', action: 'Send to back' },
+    { key: 'Ctrl/Cmd + ]', action: 'Bring to front' },
   ];
 
   const handleMouseEnter = () => {

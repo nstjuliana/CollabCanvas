@@ -8,6 +8,7 @@ import { streamText, tool, stepCountIs } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { z } from 'zod';
 import * as agentActions from './agentActions';
+import { buildShapeObject } from '../utils/shapeBuilders';
 
 /**
  * Legacy tool definitions array (kept for reference)
@@ -369,11 +370,13 @@ export async function executeFunctionCall(functionName, args, shapes) {
  * 
  * @param {string} userCommand - Natural language command from user
  * @param {Array} shapes - Current shapes array
+ * @param {Array} selectedShapeIds - Currently selected shape IDs
+ * @param {Object} hookFunctions - Hook-level functions that manage UI state (deleteShape, selectShape)
  * @param {Function} onChunk - Callback for streaming text chunks
  * @param {Function} onToolCall - Callback for tool call execution
  * @returns {Promise<Object>} Result with success status and message
  */
-export async function processAgentCommand(userCommand, shapes, { onChunk, onToolCall } = {}) {
+export async function processAgentCommand(userCommand, shapes, selectedShapeIds = [], hookFunctions = {}, { onChunk, onToolCall } = {}) {
   try {
     const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
     
@@ -388,6 +391,25 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
 
     // Define tools using Zod schemas (proper AI SDK format)
     const tools = {
+      getActiveShapes: tool({
+        description: 'Get the currently selected/active shapes. Use this when user says "active shape", "selected shape", "current shape", etc. Returns the same format as findShapes.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          // Filter shapes by selectedShapeIds
+          const activeShapes = shapes.filter(s => selectedShapeIds.includes(s.id));
+          if (onToolCall) onToolCall({ function: 'getActiveShapes', args: {}, result: activeShapes });
+          return activeShapes.map(shape => ({
+            id: shape.id,
+            type: shape.type,
+            x: shape.x,
+            y: shape.y,
+            fill: shape.fill,
+            width: shape.width,
+            height: shape.height,
+          }));
+        },
+      }),
+      
       findShapes: tool({
         description: 'Find shapes on the canvas. Returns an array of shape objects, each with an "id" field that you MUST use in subsequent operations. Example return: [{id: "abc123", type: "circle", x: 100, y: 200, fill: "red"}]',
         inputSchema: z.object({
@@ -414,25 +436,31 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
         },
       }),
       
-      createShape: tool({
-        description: 'Create a single shape on the canvas',
+      createShapes: tool({
+        description: 'Create one or more shapes on the canvas. Supports both single shape and batch creation. Use for any creation task.',
         inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to create'),
-          x: z.number().describe('X position on canvas (0 is left)'),
-          y: z.number().describe('Y position on canvas (0 is top)'),
-          properties: z.object({
+          shapes: z.array(z.object({
+            type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']),
+            x: z.number(),
+            y: z.number(),
             color: z.string().optional(),
             width: z.number().optional(),
             height: z.number().optional(),
             text: z.string().optional(),
             fontSize: z.number().optional(),
             rotation: z.number().optional(),
-          }).optional(),
+          })).describe('Array of shape definitions. Can be a single shape [{}] or multiple shapes [{}, {}, ...]'),
         }),
-        execute: async ({ type, x, y, properties }) => {
-          const result = await agentActions.createShapes(type, x, y, properties || {});
-          if (onToolCall) onToolCall({ function: 'createShape', args: { type, x, y, properties }, result });
-          return result;
+        execute: async ({ shapes: shapesToCreate }) => {
+          // Build shape objects using the shared builder
+          const shapeObjects = shapesToCreate.map(s => {
+            const { type, x, y, ...properties } = s;
+            return buildShapeObject(type, x, y, properties);
+          });
+          const result = await agentActions.createShapes(shapeObjects);
+          if (onToolCall) onToolCall({ function: 'createShapes', args: { shapes: shapesToCreate }, result });
+          const shapeIds = Array.isArray(result) ? result : [result];
+          return { success: true, shapeIds, count: shapeIds.length };
         },
       }),
       
@@ -477,135 +505,54 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
         },
       }),
       
+      updateMultipleShapes: tool({
+        description: 'Update multiple shapes at once (batch operation). Use for "change all active shapes to red", "resize shapes", etc. More efficient than updating one by one.',
+        inputSchema: z.object({
+          updates: z.array(z.object({
+            shapeId: z.string().describe('Shape ID from findShapes or getActiveShapes'),
+            color: z.string().optional().describe('New color'),
+            x: z.number().optional().describe('New X position'),
+            y: z.number().optional().describe('New Y position'),
+            width: z.number().optional().describe('New width'),
+            height: z.number().optional().describe('New height'),
+            rotation: z.number().optional().describe('New rotation'),
+          })).describe('Array of shape updates. Each must have shapeId and at least one property to update'),
+        }),
+        execute: async ({ updates }) => {
+          // Convert to format expected by updateShapes: [{id, ...properties}]
+          const updateObjects = updates.map(({ shapeId, ...properties }) => ({
+            id: shapeId,
+            ...properties
+          }));
+          const result = await agentActions.updateShapes(updateObjects);
+          if (onToolCall) onToolCall({ function: 'updateMultipleShapes', args: { updates }, result });
+          return { success: true, message: `Updated ${updates.length} shape(s)`, count: updates.length };
+        },
+      }),
+      
+      deleteMultipleShapes: tool({
+        description: 'Delete multiple shapes at once (batch operation). Use for "delete all active shapes", "delete all red circles", etc. More efficient than deleting one by one.',
+        inputSchema: z.object({
+          shapeIds: z.array(z.string()).describe('Array of shape IDs to delete from findShapes or getActiveShapes'),
+        }),
+        execute: async ({ shapeIds }) => {
+          const result = await agentActions.deleteMultipleShapes(shapeIds);
+          if (onToolCall) onToolCall({ function: 'deleteMultipleShapes', args: { shapeIds }, result });
+          return { success: true, message: `Deleted ${shapeIds.length} shape(s)`, count: shapeIds.length };
+        },
+      }),
+      
       deleteShape: tool({
         description: 'Delete a single shape by its ID. You MUST call findShapes first to get the shape ID.',
         inputSchema: z.object({
           shapeId: z.string().describe('Shape ID from findShapes result'),
         }),
         execute: async ({ shapeId }) => {
-          const result = await agentActions.deleteShape(shapeId);
+          // Use hook-level deleteShape if available (clears selection), otherwise use service-level
+          const deleteFunc = hookFunctions.deleteShape || agentActions.deleteShape;
+          const result = await deleteFunc(shapeId);
           if (onToolCall) onToolCall({ function: 'deleteShape', args: { shapeId }, result });
           return { success: true, message: `Deleted shape ${shapeId}` };
-        },
-      }),
-      
-      // Single shape operations - for "a square", "any circle", etc.
-      moveOneShapeByType: tool({
-        description: 'Find and move ONE shape of a specific type. Use this when user says "a square", "any circle", etc. (singular).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to move'),
-          deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
-          deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
-          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
-        }),
-        execute: async ({ type, deltaX, deltaY, color }) => {
-          const criteria = { type, ...(color && { color }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          // Only move the first one
-          await agentActions.moveShapeBy(foundShapes[0].id, deltaX, deltaY);
-          if (onToolCall) onToolCall({ function: 'moveOneShapeByType', args: { type, deltaX, deltaY, color }, result: [foundShapes[0]] });
-          return { success: true, message: `Moved one ${type}`, count: 1 };
-        },
-      }),
-      
-      // Batch operations - for "all squares", "the circles", etc.
-      moveShapesByType: tool({
-        description: 'Find and move ALL shapes of a specific type. Use this when user says "all squares", "the circles", etc. (plural).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to move'),
-          deltaX: z.number().describe('Horizontal offset (positive = right, negative = left)'),
-          deltaY: z.number().describe('Vertical offset (positive = down, negative = up)'),
-          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
-        }),
-        execute: async ({ type, deltaX, deltaY, color }) => {
-          const criteria = { type, ...(color && { color }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          const shapeIds = foundShapes.map(s => s.id);
-          await agentActions.moveMultipleShapesBy(shapeIds, deltaX, deltaY);
-          if (onToolCall) onToolCall({ function: 'moveShapesByType', args: { type, deltaX, deltaY, color }, result: foundShapes });
-          return { success: true, message: `Moved ${foundShapes.length} ${type} shape(s)`, count: foundShapes.length };
-        },
-      }),
-      
-      changeOneShapeColorByType: tool({
-        description: 'Find and change color of ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to recolor'),
-          newColor: z.string().describe('New color to apply'),
-          currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
-        }),
-        execute: async ({ type, newColor, currentColor }) => {
-          const criteria = { type, ...(currentColor && { color: currentColor }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          await agentActions.changeShapeColor(foundShapes[0].id, newColor);
-          if (onToolCall) onToolCall({ function: 'changeOneShapeColorByType', args: { type, newColor, currentColor }, result: [foundShapes[0]] });
-          return { success: true, message: `Changed color of one ${type} to ${newColor}`, count: 1 };
-        },
-      }),
-      
-      changeColorByType: tool({
-        description: 'Find and change color of ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to recolor'),
-          newColor: z.string().describe('New color to apply'),
-          currentColor: z.string().optional().describe('Optional: only change shapes of this current color'),
-        }),
-        execute: async ({ type, newColor, currentColor }) => {
-          const criteria = { type, ...(currentColor && { color: currentColor }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          const shapeIds = foundShapes.map(s => s.id);
-          await agentActions.changeMultipleShapesColor(shapeIds, newColor);
-          if (onToolCall) onToolCall({ function: 'changeColorByType', args: { type, newColor, currentColor }, result: foundShapes });
-          return { success: true, message: `Changed color of ${foundShapes.length} ${type} shape(s) to ${newColor}`, count: foundShapes.length };
-        },
-      }),
-      
-      deleteOneShapeByType: tool({
-        description: 'Find and delete ONE shape of a specific type. Use when user says "a square", "any circle" (singular).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shape to delete'),
-          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
-        }),
-        execute: async ({ type, color }) => {
-          const criteria = { type, ...(color && { color }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          await agentActions.deleteShape(foundShapes[0].id);
-          if (onToolCall) onToolCall({ function: 'deleteOneShapeByType', args: { type, color }, result: [foundShapes[0]] });
-          return { success: true, message: `Deleted one ${type}`, count: 1 };
-        },
-      }),
-      
-      deleteShapesByType: tool({
-        description: 'Find and delete ALL shapes of a specific type. Use when user says "all squares", "the circles" (plural).',
-        inputSchema: z.object({
-          type: z.enum(['rectangle', 'circle', 'text', 'square', 'line', 'star']).describe('Type of shapes to delete'),
-          color: z.string().optional().describe('Optional: Filter by color (red, orange, yellow, green, blue, purple, pink, brown, gray, black, white, etc.). Uses RGB range matching.'),
-        }),
-        execute: async ({ type, color }) => {
-          const criteria = { type, ...(color && { color }) };
-          const foundShapes = await agentActions.findShapes(shapes, criteria);
-          if (foundShapes.length === 0) {
-            return { success: false, message: `No ${type} shapes found` };
-          }
-          const shapeIds = foundShapes.map(s => s.id);
-          await agentActions.deleteMultipleShapes(shapeIds);
-          if (onToolCall) onToolCall({ function: 'deleteShapesByType', args: { type, color }, result: foundShapes });
-          return { success: true, message: `Deleted ${foundShapes.length} ${type} shape(s)`, count: foundShapes.length };
         },
       }),
     };
@@ -620,66 +567,160 @@ export async function processAgentCommand(userCommand, shapes, { onChunk, onTool
           content: `You are an AI assistant that helps users manipulate shapes on a canvas. 
 
 AVAILABLE SHAPE TYPES:
-You can work with these shape types: rectangle, square, circle, text, line, star, image
-- "rectangle" and "square" are the same type (both are rectangles)
-- "line" = line shapes (straight lines)
-- "star" = star shapes (multi-pointed stars)
-- "circle" = circular shapes
-- "text" = text labels
-- "image" = image shapes
+rectangle, square, circle, text, line, star, image
+Note: "rectangle" and "square" both use type "rectangle"
 
 CANVAS INFORMATION:
-- Canvas size: 5000 x 5000 pixels
-- Origin: Top-left corner is (0, 0)
-- Center/Middle: (2500, 2500)
-- Coordinate system: X increases right, Y increases down
+- Size: 5000 x 5000 pixels
+- Origin: (0, 0) at top-left
+- Center: (2500, 2500)
+- Coordinates: X increases right, Y increases down
+
+DEFAULTS - Use these when user doesn't specify:
+- Position: Center (2500, 2500) or random if multiple
+- Size: 
+  - "tiny" = 30-50px
+  - "small" = 80-100px
+  - "normal" = 100-150px (default)
+  - "large" = 200-300px
+  - "huge"/"gigantic" = 400-500px
+- Color: User's color name or pick a vibrant color
+- NEVER ask for clarification - make reasonable choices!
 
 POSITIONAL REFERENCE:
-- "top" = y near 0 (e.g., y: 100-500)
-- "bottom" = y near 5000 (e.g., y: 4500-4900)
-- "left" = x near 0 (e.g., x: 100-500)
-- "right" = x near 5000 (e.g., x: 4500-4900)
-- "middle" or "center" = (2500, 2500)
+When positioning at edges/corners, ALWAYS account for shape dimensions:
+- "top" = y: 250 (no width/height adjustment)
+- "bottom" = y: 5000 - shape.height (keeps shape on canvas)
+- "left" = x: 250 (no width/height adjustment)
+- "right" = x: 5000 - shape.width (keeps shape on canvas)
+- "middle"/"center" = (2500 - shape.width/2, 2500 - shape.height/2)
 - "top-left" = (250, 250)
-- "top-right" = (4750, 250)
-- "bottom-left" = (250, 4750)
-- "bottom-right" = (4750, 4750)
+- "top-right" = (5000 - shape.width, 250)
+- "bottom-left" = (250, 5000 - shape.height)
+- "bottom-right" = (5000 - shape.width, 5000 - shape.height)
 
-CRITICAL RULES - Pay attention to SINGULAR vs PLURAL:
+ACTIVE/SELECTED SHAPES:
+When user says "active shape", "selected shape", "current shape":
+- Use getActiveShapes() to get currently selected shapes
+- No filtering needed - returns what user has selected
+- Then perform actions on those shapes
 
-SINGULAR (a, any, one) → Use "One" tools:
-- "Move A square" → moveOneShapeByType
-- "Move ANY square" → moveOneShapeByType  
-- "Delete A circle" → deleteOneShapeByType
-- "Delete a red line" → deleteOneShapeByType
+WORKFLOW - Multi-step approach:
 
-PLURAL (all, the, multiple) → Use plural "ByType" tools:
-- "Move ALL squares" → moveShapesByType
-- "Move THE squares" → moveShapesByType
-- "Delete circles" → deleteShapesByType
-- "Delete all red lines" → deleteShapesByType
-- "Delete the stars" → deleteShapesByType
+1. FIND shapes:
+   a) For "active"/"selected" → getActiveShapes()
+   b) For criteria-based → findShapes({criteria: {...}})
+   - Both return array with: {id, type, x, y, fill, width, height}
+   - Use this data to make intelligent decisions!
 
-MOVEMENT:
-- Relative: "left" = negative X, "right" = positive X, "up" = negative Y, "down" = positive Y
-- Absolute positions: Use moveShapeTo with coordinates from POSITIONAL REFERENCE above
-- Distance examples: 50px (small), 100px (medium), 340px (medium-large), 500px (large)
+2. EXTRACT the shape ID(s) and properties from results
+
+3. PERFORM action with the ID(s):
+   Single operations:
+   - moveShapeTo, moveShapeBy
+   - changeShapeColor
+   - resizeShape, rotateShape
+   - deleteShape
+   
+   Batch operations (pass arrays for multiple shapes):
+   - createShapes (handles single or multiple)
+   - updateMultipleShapes (update properties of many)
+   - deleteMultipleShapes (delete many at once)
 
 EXAMPLES:
-User: "Move the blue square to the middle"
-✓ Call: findShapes({type: "square", color: "blue"}), then moveShapeTo({shapeId: "...", x: 2500, y: 2500})
 
-User: "Move any square 340px to the left"
-✓ Call: moveOneShapeByType({type: "square", deltaX: -340, deltaY: 0})
+User: "Move the active shape to the top"
+Step 1: getActiveShapes()
+       → Get: [{id: "s1", width: 100, height: 100, ...}]
+Step 2: moveShapeTo({shapeId: "s1", x: 2500, y: 250})
 
-User: "Delete all red lines"
-✓ Call: deleteShapesByType({type: "line", color: "red"})
+User: "Change the selected shape to red"
+Step 1: getActiveShapes()
+       → Get: [{id: "s1", ...}]
+Step 2: changeShapeColor({shapeId: "s1", color: "red"})
+
+User: "Move the blue square to the top"
+Step 1: findShapes({criteria: {type: "rectangle", color: "blue"}})
+       → Get: {id: "s1", width: 100, height: 100, ...}
+Step 2: moveShapeTo({shapeId: "s1", x: 2500, y: 250})
+
+User: "Move the blue square to the bottom-right"
+Step 1: findShapes({criteria: {type: "rectangle", color: "blue"}})
+       → Get: {id: "s1", width: 500, height: 500, ...}
+Step 2: Calculate: x = 5000 - 500 = 4500, y = 5000 - 500 = 4500
+Step 3: moveShapeTo({shapeId: "s1", x: 4500, y: 4500})
+       // Now entire shape stays on canvas!
+
+User: "Delete all red circles"
+Step 1: findShapes({criteria: {type: "circle", color: "red"}})
+Step 2: Loop through results and call deleteShape for each ID
 
 User: "Change the green star to blue"
-✓ Call: changeOneShapeColorByType({type: "star", newColor: "blue", currentColor: "green"})
+Step 1: findShapes({criteria: {type: "star", color: "green"}})
+Step 2: Extract shapes[0].id
+Step 3: changeShapeColor({shapeId: shapes[0].id, color: "blue"})
 
-NEVER use findShapes alone - it doesn't do anything!
-After executing, confirm what you did.`,
+User: "Move any square 100px right"
+Step 1: findShapes({criteria: {type: "rectangle"}})
+Step 2: Extract shapes[0] → {id: "abc", x: 500, y: 300, ...}
+Step 3: moveShapeBy({shapeId: "abc", deltaX: 100, deltaY: 0})
+
+User: "Move the red circle below the blue square"
+Step 1: findShapes({criteria: {type: "rectangle", color: "blue"}})
+       → Get blue square: {id: "s1", x: 1000, y: 500, height: 100}
+Step 2: findShapes({criteria: {type: "circle", color: "red"}})
+       → Get red circle: {id: "c1", x: 800, y: 600}
+Step 3: moveShapeTo({shapeId: "c1", x: 1000, y: 650}) // blue.y + blue.height + gap
+
+BATCH OPERATIONS (pass arrays):
+
+User: "Create a red circle at 500, 500"
+Step 1: createShapes({shapes: [
+  {type: "circle", x: 500, y: 500, color: "red"}
+]})
+
+User: "Create a gigantic pink star"
+Step 1: createShapes({shapes: [
+  {type: "star", x: 2500, y: 2500, color: "pink", width: 400, height: 400}
+]})
+// Used center position and 400px for "gigantic"
+
+User: "Create 5 blue circles in a row"
+Step 1: createShapes({shapes: [
+  {type: "circle", x: 100, y: 500, color: "blue"},
+  {type: "circle", x: 300, y: 500, color: "blue"},
+  {type: "circle", x: 500, y: 500, color: "blue"},
+  {type: "circle", x: 700, y: 500, color: "blue"},
+  {type: "circle", x: 900, y: 500, color: "blue"}
+]})
+
+User: "Change all active shapes to red"
+Step 1: getActiveShapes() → [{id: "s1"}, {id: "s2"}, {id: "s3"}]
+Step 2: updateMultipleShapes({updates: [
+  {shapeId: "s1", color: "red"},
+  {shapeId: "s2", color: "red"},
+  {shapeId: "s3", color: "red"}
+]})
+
+User: "Delete all red circles"
+Step 1: findShapes({criteria: {type: "circle", color: "red"}})
+       → Get: [{id: "c1"}, {id: "c2"}, {id: "c3"}]
+Step 2: deleteMultipleShapes({shapeIds: ["c1", "c2", "c3"]})
+
+MOVEMENT DIRECTIONS:
+- Right: deltaX positive
+- Left: deltaX negative
+- Down: deltaY positive
+- Up: deltaY negative
+
+IMPORTANT:
+- ALWAYS call findShapes FIRST to get shape IDs
+- NEVER use findShapes alone - always follow with an action
+- Handle "the" (singular) by using first result: shapes[0]
+- Handle "all" (plural) by processing all results
+- NEVER ask for clarification - use sensible defaults
+- Be decisive and proactive
+- Confirm what you did after completion`,
         },
         {
           role: 'user',

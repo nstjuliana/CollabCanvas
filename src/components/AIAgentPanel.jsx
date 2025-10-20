@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { processAgentCommand } from '../services/agentExecutor';
 import './AIAgentPanel.css';
 
-function AIAgentPanel({ shapes }) {
+function AIAgentPanel({ shapes, selectedShapeIds = [], deleteShape, selectShape }) {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,7 +56,7 @@ function AIAgentPanel({ shapes }) {
 
     try {
       // Process command through AI agent with streaming
-      const result = await processAgentCommand(userCommand, shapes, {
+      const result = await processAgentCommand(userCommand, shapes, selectedShapeIds, { deleteShape, selectShape }, {
         // Stream text chunks as they arrive
         onChunk: (chunk) => {
           setHistory(prev => {

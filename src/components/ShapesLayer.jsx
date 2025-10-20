@@ -22,10 +22,13 @@ function ShapesLayer({
   editingShapeId
 }) {
   
+  // Sort shapes by zIndex for proper layering
+  const sortedShapes = [...shapes].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+  
   return (
     <Layer>
       {/* Real-time shapes from Firestore */}
-      {shapes.map((shape) => {
+      {sortedShapes.map((shape) => {
         // Hide the shape if it's currently being edited
         if (isEditingText && editingShapeId === shape.id) {
           return null;

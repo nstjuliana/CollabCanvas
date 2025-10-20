@@ -20,6 +20,7 @@ export const SHAPE_DEFAULTS = {
   STROKE_WIDTH: 2,
   CORNER_RADIUS: 0,
   OPACITY: 1,
+  ZINDEX: 0,
   TEXT_FONT_SIZE: 24,
   TEXT_FONT_FAMILY: 'Inter, system-ui, sans-serif',
   TEXT_DEFAULT: 'Text',

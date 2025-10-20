@@ -781,7 +781,12 @@ function Canvas() {
 
       <ShapeCount shapesLength={shapes.length} />
 
-      <AIAgentPanel shapes={shapes} />
+      <AIAgentPanel 
+        shapes={shapes} 
+        selectedShapeIds={selectedShapeIds}
+        deleteShape={deleteShape}
+        selectShape={selectShape}
+      />
 
       <Stage
         ref={stageRef}

@@ -226,6 +226,196 @@ const useKeyboardShortcuts = ({
           console.error('Error moving shapes:', err);
         }
       }
+
+      // [ key - Send backward (decrease z-index by 1)
+      if (e.key === '[' && !e.ctrlKey && !e.metaKey && selectedShapeIds.length > 0) {
+        e.preventDefault();
+
+        // Filter out shapes locked by others
+        const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToUpdate.length === 0) {
+          return;
+        }
+
+        // Store previous states for undo
+        const previousStates = shapesToUpdate.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, updates: { zIndex: shape.zIndex ?? 0 } } : null;
+        }).filter(Boolean);
+
+        try {
+          // Decrease z-index by 1 for each selected shape
+          const updatesToApply = shapesToUpdate.map(id => {
+            const shape = shapes.find(s => s.id === id);
+            const currentZIndex = shape.zIndex ?? 0;
+            return {
+              id,
+              zIndex: currentZIndex - 1
+            };
+          });
+
+          // Single batch write for all shapes
+          await updateShapes(updatesToApply);
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToUpdate,
+              previousStates,
+              newStates: previousStates.map(s => ({
+                id: s.id,
+                updates: { zIndex: s.updates.zIndex - 1 }
+              }))
+            }
+          });
+        } catch (err) {
+          console.error('Error updating z-index:', err);
+        }
+      }
+
+      // ] key - Bring forward (increase z-index by 1)
+      if (e.key === ']' && !e.ctrlKey && !e.metaKey && selectedShapeIds.length > 0) {
+        e.preventDefault();
+
+        // Filter out shapes locked by others
+        const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToUpdate.length === 0) {
+          return;
+        }
+
+        // Store previous states for undo
+        const previousStates = shapesToUpdate.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, updates: { zIndex: shape.zIndex ?? 0 } } : null;
+        }).filter(Boolean);
+
+        try {
+          // Increase z-index by 1 for each selected shape
+          const updatesToApply = shapesToUpdate.map(id => {
+            const shape = shapes.find(s => s.id === id);
+            const currentZIndex = shape.zIndex ?? 0;
+            return {
+              id,
+              zIndex: currentZIndex + 1
+            };
+          });
+
+          // Single batch write for all shapes
+          await updateShapes(updatesToApply);
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToUpdate,
+              previousStates,
+              newStates: previousStates.map(s => ({
+                id: s.id,
+                updates: { zIndex: s.updates.zIndex + 1 }
+              }))
+            }
+          });
+        } catch (err) {
+          console.error('Error updating z-index:', err);
+        }
+      }
+
+      // Ctrl+[ or Cmd+[ - Send to back (set to lowest z-index - 1)
+      if ((e.ctrlKey || e.metaKey) && e.key === '[' && selectedShapeIds.length > 0) {
+        e.preventDefault();
+
+        // Filter out shapes locked by others
+        const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToUpdate.length === 0) {
+          return;
+        }
+
+        // Store previous states for undo
+        const previousStates = shapesToUpdate.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, updates: { zIndex: shape.zIndex ?? 0 } } : null;
+        }).filter(Boolean);
+
+        try {
+          // Find the minimum z-index among all shapes
+          const minZIndex = Math.min(...shapes.map(s => s.zIndex ?? 0));
+          
+          // Set selected shapes to below the minimum
+          const updatesToApply = shapesToUpdate.map(id => ({
+            id,
+            zIndex: minZIndex - 1
+          }));
+
+          // Single batch write for all shapes
+          await updateShapes(updatesToApply);
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToUpdate,
+              previousStates,
+              newStates: shapesToUpdate.map(id => ({
+                id,
+                updates: { zIndex: minZIndex - 1 }
+              }))
+            }
+          });
+        } catch (err) {
+          console.error('Error updating z-index:', err);
+        }
+      }
+
+      // Ctrl+] or Cmd+] - Bring to front (set to highest z-index + 1)
+      if ((e.ctrlKey || e.metaKey) && e.key === ']' && selectedShapeIds.length > 0) {
+        e.preventDefault();
+
+        // Filter out shapes locked by others
+        const shapesToUpdate = selectedShapeIds.filter(id => !isLockedByOther(id));
+
+        if (shapesToUpdate.length === 0) {
+          return;
+        }
+
+        // Store previous states for undo
+        const previousStates = shapesToUpdate.map(id => {
+          const shape = shapes.find(s => s.id === id);
+          return shape ? { id, updates: { zIndex: shape.zIndex ?? 0 } } : null;
+        }).filter(Boolean);
+
+        try {
+          // Find the maximum z-index among all shapes
+          const maxZIndex = Math.max(...shapes.map(s => s.zIndex ?? 0));
+          
+          // Set selected shapes to above the maximum
+          const updatesToApply = shapesToUpdate.map(id => ({
+            id,
+            zIndex: maxZIndex + 1
+          }));
+
+          // Single batch write for all shapes
+          await updateShapes(updatesToApply);
+
+          // Add to history
+          addToHistory({
+            type: ACTION_TYPES.UPDATE,
+            data: {
+              shapeIds: shapesToUpdate,
+              previousStates,
+              newStates: shapesToUpdate.map(id => ({
+                id,
+                updates: { zIndex: maxZIndex + 1 }
+              }))
+            }
+          });
+        } catch (err) {
+          console.error('Error updating z-index:', err);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);

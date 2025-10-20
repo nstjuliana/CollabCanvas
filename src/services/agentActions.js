@@ -167,7 +167,16 @@ export async function deleteShapesByCriteria(shapes, criteria) {
  * @returns {Promise<void>}
  */
 export async function moveShapeTo(shapeId, x, y) {
-  await updateShapeService(shapeId, { x, y });
+  await updateShapesService(shapeId, { x, y });
+}
+
+/**
+ * Update multiple shapes at once
+ * @param {Array<object>} updates - Array of {id, ...properties} objects
+ * @returns {Promise<void>}
+ */
+export async function updateShapes(updates) {
+  await updateShapesService(updates);
 }
 
 /**
@@ -181,7 +190,7 @@ export async function moveShapeBy(shapeId, deltaX, deltaY) {
   const shape = await getShape(shapeId);
   if (!shape) throw new Error('Shape not found');
   
-  await updateShapeService(shapeId, {
+  await updateShapesService(shapeId, {
     x: shape.x + deltaX,
     y: shape.y + deltaY,
   });
@@ -211,9 +220,9 @@ export async function changeShapeColor(shapeId, color) {
   
   // Lines use 'stroke' for color, other shapes use 'fill'
   if (shape && shape.type === SHAPE_TYPES.LINE) {
-    await updateShapeService(shapeId, { stroke: normalizedColor });
+    await updateShapesService(shapeId, { stroke: normalizedColor });
   } else {
-    await updateShapeService(shapeId, { fill: normalizedColor });
+    await updateShapesService(shapeId, { fill: normalizedColor });
   }
 }
 
@@ -229,9 +238,9 @@ export async function changeMultipleShapesColor(shapeIds, color) {
     const shape = await getShape(id);
     // Lines use 'stroke' for color, other shapes use 'fill'
     if (shape && shape.type === SHAPE_TYPES.LINE) {
-      return updateShapeService(id, { stroke: normalizedColor });
+      return updateShapesService(id, { stroke: normalizedColor });
     } else {
-      return updateShapeService(id, { fill: normalizedColor });
+      return updateShapesService(id, { fill: normalizedColor });
     }
   });
   await Promise.all(promises);
@@ -245,7 +254,7 @@ export async function changeMultipleShapesColor(shapeIds, color) {
  * @returns {Promise<void>}
  */
 export async function resizeShape(shapeId, width, height) {
-  await updateShapeService(shapeId, { width, height });
+  await updateShapesService(shapeId, { width, height });
 }
 
 /**
@@ -255,7 +264,7 @@ export async function resizeShape(shapeId, width, height) {
  * @returns {Promise<void>}
  */
 export async function rotateShape(shapeId, rotation) {
-  await updateShapeService(shapeId, { rotation });
+  await updateShapesService(shapeId, { rotation });
 }
 
 /**
@@ -265,7 +274,7 @@ export async function rotateShape(shapeId, rotation) {
  * @returns {Promise<void>}
  */
 export async function changeText(shapeId, text) {
-  await updateShapeService(shapeId, { text });
+  await updateShapesService(shapeId, { text });
 }
 
 /**
@@ -282,7 +291,7 @@ export async function changeText(shapeId, text) {
  */
 export async function createGrid(type, rows, cols, startX, startY, spacingX = 150, spacingY = 150, properties = {}) {
   const shapeObjects = buildGridShapeObjects(type, rows, cols, startX, startY, spacingX, spacingY, properties);
-  const promises = shapeObjects.map(shapeData => createShapeService(shapeData));
+  const promises = shapeObjects.map(shapeData => createShapesService(shapeData));
   return await Promise.all(promises);
 }
 

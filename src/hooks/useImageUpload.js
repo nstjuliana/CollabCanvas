@@ -93,6 +93,7 @@ const useImageUpload = ({
           height,
           imageUrl,
           opacity: SHAPE_DEFAULTS.OPACITY,
+          zIndex: SHAPE_DEFAULTS.ZINDEX,
           rotation: 0,
           scaleX: 1,
           scaleY: 1,

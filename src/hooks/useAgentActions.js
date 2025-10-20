@@ -27,13 +27,13 @@ function useAgentActions(shapes) {
   }, [shapes]);
 
   // Pass-through functions that don't need shapes state
-  const createShape = useCallback(async (type, x, y, properties = {}) => {
-    return await agentActions.createShape(type, x, y, properties);
+  const createShapes = useCallback(async (typeOrShapes, x, y, properties = {}) => {
+    return await agentActions.createShapes(typeOrShapes, x, y, properties);
   }, []);
 
-  const createMultipleShapes = useCallback(async (shapesArray) => {
-    return await agentActions.createMultipleShapes(shapesArray);
-  }, []);
+  // Backward compatibility
+  const createShape = createShapes;
+  const createMultipleShapes = (shapesArray) => createShapes(shapesArray);
 
   const deleteShape = useCallback(async (shapeId) => {
     return await agentActions.deleteShape(shapeId);
@@ -90,8 +90,9 @@ function useAgentActions(shapes) {
     getShapeInfo,
     
     // Create functions
-    createShape,
-    createMultipleShapes,
+    createShapes,
+    createShape,            // Backward compatibility
+    createMultipleShapes,   // Backward compatibility
     createGrid,
     
     // Delete functions

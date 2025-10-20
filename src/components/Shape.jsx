@@ -1,5 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
-import { Rect, Ellipse, Group, Text, Rect as KonvaRect, Image as KonvaImage } from 'react-konva';
+import { Rect, Ellipse, Group, Text, Rect as KonvaRect, Image as KonvaImage, Line, Star as KonvaStar } from 'react-konva';
 import { SHAPE_TYPES, SHAPE_DEFAULTS, CURSOR_CONFIG } from '../utils/constants';
 import useImage from 'use-image';
 
@@ -240,8 +240,8 @@ function Shape({
     // Hovering/preview images: use fixed stroke width regardless of zoom or image scale
     finalStrokeWidth = 4;
   } else if (showHoverEffect) {
-    // Hovering/preview shapes: slightly thicker stroke to indicate interactivity
-    finalStrokeWidth = strokeWidth + 19.5;
+    // Hovering/preview shapes: subtle stroke to indicate interactivity
+    finalStrokeWidth = strokeWidth + 1;
   } else {
     // Regular shapes: normal scaling (zoom-dependent)
     finalStrokeWidth = strokeWidth;
@@ -406,6 +406,29 @@ function Shape({
       );
       break;
 
+    case SHAPE_TYPES.LINE:
+      shapeElement = (
+        <Line
+          {...commonProps}
+          points={shapeData.points || [0, 0, width, 0]}
+          fill={undefined}
+          lineCap="round"
+          lineJoin="round"
+        />
+      );
+      break;
+
+    case SHAPE_TYPES.STAR:
+      shapeElement = (
+        <KonvaStar
+          {...commonProps}
+          numPoints={shapeData.numPoints || 5}
+          innerRadius={shapeData.innerRadius || (Math.min(width, height) / 2) * 0.5}
+          outerRadius={shapeData.outerRadius || Math.min(width, height) / 2}
+        />
+      );
+      break;
+
     case SHAPE_TYPES.RECTANGLE:
     default:
       shapeElement = (
@@ -421,6 +444,8 @@ function Shape({
 
   // If shape is locked and we have a locker name, add a name tag
   if (isLocked && lockerName) {
+    const radius = type === SHAPE_TYPES.CIRCLE ? width / 2 : 
+                   type === SHAPE_TYPES.STAR ? (shapeData.outerRadius || Math.min(width, height) / 2) : 0;
     return <ShapeWithNameTag 
       shapeElement={shapeElement}
       lockerName={lockerName}
@@ -429,7 +454,7 @@ function Shape({
       y={y}
       width={width}
       height={height}
-      radius={type === SHAPE_TYPES.CIRCLE ? width / 2 : 0}
+      radius={radius}
       type={type}
       inverseScale={inverseScale}
     />;
@@ -478,8 +503,14 @@ function ShapeWithNameTag({
   // Position the name tag Group at the shape's position
   let groupX, groupY, tagOffsetX, tagOffsetY;
 
-  groupX = type === SHAPE_TYPES.CIRCLE ? x - (labelWidth * inverseScale) / 2 : x + (width / 2) - (labelWidth * inverseScale) / 2;
-  groupY = type === SHAPE_TYPES.CIRCLE ? y - radius : y;
+  // Center the label horizontally for all shapes
+  if (type === SHAPE_TYPES.CIRCLE || type === SHAPE_TYPES.STAR) {
+    groupX = x - (labelWidth * inverseScale) / 2;
+    groupY = type === SHAPE_TYPES.CIRCLE ? y - radius : y - radius;
+  } else {
+    groupX = x + (width / 2) - (labelWidth * inverseScale) / 2;
+    groupY = y;
+  }
   tagOffsetX = 0;
   tagOffsetY = -(labelHeight + gap);
 

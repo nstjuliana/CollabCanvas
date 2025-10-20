@@ -1,4 +1,6 @@
+import { useState, useRef } from 'react';
 import ColorPicker from './ColorPicker';
+import KeyboardShortcuts from './KeyboardShortcuts';
 import { TOOL_TYPES } from '../utils/constants';
 
 function Toolbar({
@@ -14,30 +16,64 @@ function Toolbar({
   stageScale,
   handleClearCanvas
 }) {
+  const [showShapesMenu, setShowShapesMenu] = useState(false);
+  const hideTimeoutRef = useRef(null);
+
+  const shapes = [
+    { type: TOOL_TYPES.RECTANGLE, icon: '■', title: 'Rectangle' },
+    { type: TOOL_TYPES.CIRCLE, icon: '⬤', title: 'Circle' },
+    { type: TOOL_TYPES.STAR, icon: '★', title: 'Star' },
+    { type: TOOL_TYPES.LINE, icon: '╱', title: 'Line' },
+    { type: TOOL_TYPES.TEXT, icon: 'T', title: 'Text' },
+  ];
+
+  const selectedShape = shapes.find(s => s.type === selectedTool);
+  const isShapeTool = shapes.some(s => s.type === selectedTool);
+
+  const handleMouseEnter = () => {
+    if (hideTimeoutRef.current) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+    setShowShapesMenu(true);
+  };
+
+  const handleMouseLeave = () => {
+    hideTimeoutRef.current = setTimeout(() => {
+      setShowShapesMenu(false);
+    }, 100);
+  };
+
   return (
     <div className="toolbar">
-      {/* Shapes */}
-      <button
-        onClick={() => setSelectedTool(TOOL_TYPES.RECTANGLE)}
-        className={`toolbar-button ${selectedTool === TOOL_TYPES.RECTANGLE ? 'active' : ''}`}
-        title="Rectangle Tool (Double-click to create)"
+      {/* Unified Shapes Menu */}
+      <div 
+        className="toolbar-shapes-menu"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       >
-        ■
-      </button>
-      <button
-        onClick={() => setSelectedTool(TOOL_TYPES.CIRCLE)}
-        className={`toolbar-button ${selectedTool === TOOL_TYPES.CIRCLE ? 'active' : ''}`}
-        title="Circle Tool (Double-click to create)"
-      >
-        ⬤
-      </button>
-      <button
-        onClick={() => setSelectedTool(TOOL_TYPES.TEXT)}
-        className={`toolbar-button ${selectedTool === TOOL_TYPES.TEXT ? 'active' : ''}`}
-        title="Text Tool (Click to add text)"
-      >
-        T
-      </button>
+        <button
+          className={`toolbar-button ${isShapeTool ? 'active' : ''}`}
+          title="Shapes (Hover to expand)"
+        >
+          {selectedShape ? selectedShape.icon : '■'}
+        </button>
+        
+        {showShapesMenu && (
+          <div className="shapes-dropdown">
+            {shapes.map(shape => (
+              <button
+                key={shape.type}
+                onClick={() => setSelectedTool(shape.type)}
+                className={`toolbar-button ${selectedTool === shape.type ? 'active' : ''}`}
+                title={shape.title}
+              >
+                {shape.icon}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       
       <div className="toolbar-divider"></div>
       
@@ -90,6 +126,11 @@ function Toolbar({
       <div className="toolbar-info">
         <span className="zoom-value">{Math.round(stageScale * 100)}%</span>
       </div>
+
+      <div className="toolbar-divider"></div>
+
+      {/* Keyboard Shortcuts Help */}
+      <KeyboardShortcuts />
 
       {loading && (
         <div className="toolbar-status loading">

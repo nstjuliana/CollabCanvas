@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, logout } from './services/auth';
 import { onConnectionStateChange } from './services/firebase';
 import { cleanupCursor } from './services/cursors';
@@ -14,13 +14,65 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(true);
   const [showReconnectedToast, setShowReconnectedToast] = useState(false);
-  
+  const [showMoreUsersTooltip, setShowMoreUsersTooltip] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0 });
+  const moreButtonRef = useRef(null);
+  const tooltipRef = useRef(null);
+
   // Get presence data for mobile header
   const { onlineUsers, onlineUserCount } = usePresence();
-  
-  // Filter out current user from avatars (they see their own username already)
-  const otherUsers = user ? onlineUsers.filter(u => u.userId !== user.uid) : onlineUsers;
-  const otherUserCount = otherUsers.length;
+
+  // Show only current user's circle, rest in +N tooltip
+  const displayedUsers = onlineUsers.filter(u => u.userId === user?.uid);
+  const hiddenUsers = onlineUsers.filter(u => u.userId !== user?.uid);
+
+  // Calculate tooltip position when it should be shown
+  useEffect(() => {
+    if (showMoreUsersTooltip && moreButtonRef.current) {
+      const rect = moreButtonRef.current.getBoundingClientRect();
+      const headerHeight = 80; // Approximate header height
+      const tooltipHeight = 150; // Approximate tooltip height
+
+      // Position tooltip below the button, but adjust if it would go off-screen
+      let top = rect.bottom + 5;
+      let left = rect.left + (rect.width / 2); // Center horizontally
+
+      // If tooltip would go below viewport, position above button
+      if (top + tooltipHeight > window.innerHeight) {
+        top = rect.top - tooltipHeight - 5;
+      }
+
+      // If tooltip would go off left edge, adjust left position
+      if (left < 100) {
+        left = 100;
+      }
+
+      setTooltipPosition({ top, left });
+    }
+  }, [showMoreUsersTooltip]);
+
+  // Handle clicks outside to close tooltip
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showMoreUsersTooltip &&
+        moreButtonRef.current &&
+        tooltipRef.current &&
+        !moreButtonRef.current.contains(event.target) &&
+        !tooltipRef.current.contains(event.target)
+      ) {
+        setShowMoreUsersTooltip(false);
+      }
+    };
+
+    if (showMoreUsersTooltip) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMoreUsersTooltip]);
 
   useEffect(() => {
     // Subscribe to auth state changes
@@ -110,22 +162,73 @@ function App() {
 
       <header className="app-header">
         <h1>CollabCanvas</h1>
-        
-        {/* Mobile Presence Avatars - Show other users only */}
-        <div className="mobile-presence">
-          {otherUsers.slice(0, 3).map((onlineUser) => (
+
+        {/* Online Users Avatars - Google Docs style */}
+        <div className="online-users">
+          {displayedUsers.map((onlineUser) => (
             <div
               key={onlineUser.userId}
-              className="mobile-avatar"
+              className={`user-avatar ${onlineUser.userId === user.uid ? 'current-user-avatar' : ''}`}
               style={{ backgroundColor: onlineUser.color }}
-              title={onlineUser.displayName}
+              title={onlineUser.displayName + (onlineUser.userId === user.uid ? ' (You)' : '')}
             >
               {onlineUser.displayName.charAt(0).toUpperCase()}
             </div>
           ))}
-          {otherUserCount > 3 && (
-            <div className="mobile-avatar-more">
-              +{otherUserCount - 3}
+          {hiddenUsers.length > 0 && (
+            <div
+              ref={moreButtonRef}
+              className="user-avatar-more"
+              onMouseEnter={() => setShowMoreUsersTooltip(true)}
+              onMouseLeave={(e) => {
+                // Only hide if moving away from both button and tooltip
+                setTimeout(() => {
+                  if (tooltipRef.current && !tooltipRef.current.matches(':hover') &&
+                      moreButtonRef.current && !moreButtonRef.current.matches(':hover')) {
+                    setShowMoreUsersTooltip(false);
+                  }
+                }, 100);
+              }}
+              title={`${hiddenUsers.length} more user${hiddenUsers.length > 1 ? 's' : ''}`}
+            >
+              +{hiddenUsers.length}
+            </div>
+          )}
+          {showMoreUsersTooltip && hiddenUsers.length > 0 && (
+            <div
+              ref={tooltipRef}
+              className="more-users-tooltip"
+              style={{
+                position: 'fixed',
+                top: `${tooltipPosition.top}px`,
+                left: `${tooltipPosition.left}px`,
+                transform: 'translateX(-50%)'
+              }}
+              onMouseEnter={() => setShowMoreUsersTooltip(true)}
+              onMouseLeave={(e) => {
+                // Only hide if moving away from both button and tooltip
+                setTimeout(() => {
+                  if (tooltipRef.current && !tooltipRef.current.matches(':hover') &&
+                      moreButtonRef.current && !moreButtonRef.current.matches(':hover')) {
+                    setShowMoreUsersTooltip(false);
+                  }
+                }, 100);
+              }}
+            >
+              <div className="tooltip-arrow"></div>
+              {hiddenUsers.map((hiddenUser) => (
+                <div key={hiddenUser.userId} className="tooltip-user">
+                  <div
+                    className="tooltip-user-avatar"
+                    style={{ backgroundColor: hiddenUser.color }}
+                  >
+                    {hiddenUser.displayName.charAt(0).toUpperCase()}
+                  </div>
+                  <span className="tooltip-user-name">
+                    {hiddenUser.displayName}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -141,7 +244,6 @@ function App() {
         <main className="app-main">
           <Canvas />
         </main>
-        <PresencePanel />
       </div>
     </div>
   );

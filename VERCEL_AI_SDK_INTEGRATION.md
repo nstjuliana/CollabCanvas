@@ -230,12 +230,9 @@ You can add custom behavior to streaming and tool calls:
 ```javascript
 await processAgentCommand(userCommand, shapes, {
   onChunk: (chunk) => {
-    console.log('Streaming:', chunk);
     // Custom logic here
   },
   onToolCall: ({ function: fnName, args, result }) => {
-    console.log(`Executed ${fnName} with:`, args);
-    console.log('Result:', result);
     // Analytics, logging, etc.
   },
 });
@@ -310,7 +307,6 @@ const result = await streamText({
   tools,
   maxSteps: 5,
   onFinish: ({ text, toolCalls, finishReason }) => {
-    console.log('Finished:', { text, toolCalls, finishReason });
   },
 });
 ```
@@ -329,7 +325,6 @@ const result = await streamText({
   // ...
 });
 
-console.log('Usage:', await result.usage);
 // { promptTokens, completionTokens, totalTokens }
 ```
 

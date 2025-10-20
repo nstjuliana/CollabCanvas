@@ -3,6 +3,7 @@ import Shape from './Shape';
 
 function ShapesLayer({
   shapes,
+  shapeLocks,
   selectedShapeIds,
   isLockedByOther,
   presence,
@@ -20,19 +21,27 @@ function ShapesLayer({
   isEditingText,
   editingShapeId
 }) {
+  
+  // Sort shapes by zIndex for proper layering
+  const sortedShapes = [...shapes].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
+  
   return (
     <Layer>
       {/* Real-time shapes from Firestore */}
-      {shapes.map((shape) => {
+      {sortedShapes.map((shape) => {
         // Hide the shape if it's currently being edited
         if (isEditingText && editingShapeId === shape.id) {
           return null;
         }
         
-        // Get the color and name of the user who locked this shape
-        const lockedByUser = shape.lockedBy ? presence[shape.lockedBy] : null;
+        // Get lock data from RTDB (shapeLocks prop) instead of shape object
+        const lockData = shapeLocks[shape.id];
+        const lockedByUser = lockData ? presence[lockData.userId] : null;
         const lockerColor = lockedByUser?.color || null;
         const lockerName = lockedByUser?.displayName || null;
+        
+        // Show name tag only if locked by another user (not by current user)
+        const showNameTag = isLockedByOther(shape.id) && lockerName;
         
         return (
           <Shape
@@ -42,7 +51,7 @@ function ShapesLayer({
             isLocked={isLockedByOther(shape.id)}
             isInSelectionPreview={selectionPreviewIds.includes(shape.id)}
             lockerColor={lockerColor}
-            lockerName={lockerName}
+            lockerName={showNameTag ? lockerName : null}
             stageScale={stageScale}
             onDragStart={(e) => onShapeDragStart(e, shape)}
             onDragEnd={(e) => onShapeDragEnd(e, shape)}

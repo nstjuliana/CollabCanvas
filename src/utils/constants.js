@@ -20,6 +20,7 @@ export const SHAPE_DEFAULTS = {
   STROKE_WIDTH: 2,
   CORNER_RADIUS: 0,
   OPACITY: 1,
+  ZINDEX: 0,
   TEXT_FONT_SIZE: 24,
   TEXT_FONT_FAMILY: 'Inter, system-ui, sans-serif',
   TEXT_DEFAULT: 'Text',
@@ -33,7 +34,8 @@ export const SHAPE_TYPES = {
   CIRCLE: 'circle',
   TEXT: 'text',
   IMAGE: 'image',
-  // Future: Add more shape types as needed
+  LINE: 'line',
+  STAR: 'star',
 };
 
 // Default shape type for MVP
@@ -44,6 +46,8 @@ export const TOOL_TYPES = {
   RECTANGLE: 'rectangle',
   CIRCLE: 'circle',
   TEXT: 'text',
+  LINE: 'line',
+  STAR: 'star',
   DELETE: 'delete',
 };
 
@@ -90,6 +94,48 @@ export const PRESENCE_COLORS = [
   '#FFD93D', // Bright Yellow
   '#6BCF7F', // Light Green
   '#A8DADC', // Light Blue
+  '#FF8B94', // Coral Pink
+  '#00B8A9', // Dark Teal
+  '#F8333C', // Bright Red
+  '#44AF69', // Dark Green
+  '#FCAB10', // Golden Yellow
+  '#2B9EB3', // Steel Blue
+  '#DBD5B5', // Beige
+  '#007F5F', // Forest Green
+  '#8B5A2B', // Brown
+  '#E91E63', // Hot Pink
+  '#2196F3', // Material Blue
+  '#4CAF50', // Material Green
+  '#FF9800', // Material Orange
+  '#9C27B0', // Material Purple
+  '#607D8B', // Blue Grey
+  '#795548', // Brown
+  '#00BCD4', // Cyan
+  '#CDDC39', // Lime
+  '#FFC107', // Amber
+  '#FF5722', // Deep Orange
+  '#8BC34A', // Light Green
+  '#03A9F4', // Light Blue
+  '#673AB7', // Deep Purple
+  '#E67E22', // Carrot Orange
+  '#3498DB', // Peter River Blue
+  '#2ECC71', // Emerald Green
+  '#E74C3C', // Alizarin Red
+  '#F39C12', // Sunflower Yellow
+  '#9B59B6', // Amethyst Purple
+  '#1ABC9C', // Turquoise
+  '#34495E', // Wet Asphalt Grey
+  '#F1C40F', // Sun Yellow
+  '#E67E22', // Carrot Orange
+  '#ECF0F1', // Clouds White
+  '#95A5A6', // Concrete Grey
+  '#16A085', // Green Sea
+  '#27AE60', // Nephritis Green
+  '#2980B9', // Belize Hole Blue
+  '#8E44AD', // Wisteria Purple
+  '#D35400', // Pumpkin Orange
+  '#C0392B', // Pomegranate Red
+  '#BDC3C7', // Silver Grey
 ];
 
 // Firestore Collection Names (from firebase.js, duplicated for easy access)
@@ -183,4 +229,41 @@ export const ANIMATION_DURATION = {
 // Development/Debug
 export const DEBUG = import.meta.env.DEV; // true in development mode
 export const LOG_REALTIME_EVENTS = false; // Set to true for debugging real-time features
+
+/**
+ * Get a consistent color for a user across all components (cursors, presence, etc.)
+ * Uses an enhanced algorithm for better color distribution
+ * @param {string} userId - User ID
+ * @param {Array<string>} colors - Array of available colors
+ * @returns {string} Hex color code
+ */
+export function getUserColor(userId, colors = PRESENCE_COLORS) {
+  // Enhanced hash function for better color distribution
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    const char = userId.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+
+  // Use a double-hash approach for better distribution
+  // First hash determines the starting point, second hash affects step size
+  const primaryHash = Math.abs(hash);
+  const secondaryHash = Math.abs(hash * 7 + 0x456789ab); // Different multiplier for variety
+
+  // Use primary hash for base index, secondary for step size
+  const baseIndex = primaryHash % colors.length;
+  const stepSize = (secondaryHash % 7) + 1; // Step size between 1-7
+
+  // Try different indices using the step size to find a good distribution
+  for (let attempt = 0; attempt < Math.min(colors.length, 10); attempt++) {
+    const index = (baseIndex + (attempt * stepSize)) % colors.length;
+    // This should provide better distribution across the color palette
+    return colors[index];
+  }
+
+  // Fallback to simple modulo if the above doesn't work
+  const index = primaryHash % colors.length;
+  return colors[index];
+}
 

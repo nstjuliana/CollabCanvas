@@ -95,6 +95,32 @@
   background: #f8f8f8;
 }
 
+/* Others Count Display */
+.presence-item.others-count {
+  background: #f8f8f8;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  margin: 0 1.25rem;
+  padding: 0.75rem 1rem;
+  cursor: default;
+}
+
+/* Users Stack */
+.users-stack {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.stack-circle {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
 .presence-item.offline {
   opacity: 0.6;
 }
@@ -318,6 +344,15 @@
 
   .presence-item.current-user:hover {
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+  }
+
+  .presence-item.others-count {
+    background: #333;
+    border-color: #555;
+  }
+
+  .stack-circle {
+    border-color: #2a2a2a;
   }
 
   .section-title {

@@ -5,18 +5,21 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  createShape as createShapeService,
-  updateShape as updateShapeService,
+  createShapes as createShapesService,
+  updateShapes as updateShapesService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
-  clearAllLocks as clearAllLocksService,
   subscribeToShapes,
-  lockShape as lockShapeService,
-  unlockShape as unlockShapeService,
-  unlockShapesForUser,
-  isShapeLockedByOther,
-  isShapeLockedByMe,
 } from '../services/shapes';
+import {
+  lockShapes as lockShapesService,
+  unlockShapes as unlockShapesService,
+  unlockShapesForUser,
+  clearAllLocks as clearAllLocksService,
+  subscribeToShapeLocks,
+  isShapeLockedByOther as isShapeLockedByOtherRTDB,
+  isShapeLockedByMe as isShapeLockedByMeRTDB,
+} from '../services/shapeLocks';
 import { getUserId } from '../services/auth';
 
 /**
@@ -26,17 +29,18 @@ import { getUserId } from '../services/auth';
  */
 function useShapes(presence = {}) {
   const [shapes, setShapes] = useState([]);
+  const [shapeLocks, setShapeLocks] = useState({}); // RTDB lock data
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedShapeIds, setSelectedShapeIds] = useState([]);
   
   const unsubscribeRef = useRef(null);
+  const unsubscribeLocksRef = useRef(null);
   const userId = getUserId();
   const previousPresenceRef = useRef({});
 
-  // Subscribe to real-time shape updates
+  // Subscribe to real-time shape updates from Firestore - only once on mount
   useEffect(() => {
-    
     const unsubscribe = subscribeToShapes((updatedShapes) => {
       setShapes(updatedShapes);
       setLoading(false);
@@ -45,17 +49,36 @@ function useShapes(presence = {}) {
 
     unsubscribeRef.current = unsubscribe;
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription only on unmount
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
-      
-      // Unlock any selected shapes on cleanup
+    };
+  }, []); // Empty deps - subscription should persist for component lifetime
+
+  // Subscribe to real-time lock updates from RTDB - only once on mount
+  useEffect(() => {
+    const unsubscribe = subscribeToShapeLocks((locks) => {
+      setShapeLocks(locks);
+    });
+
+    unsubscribeLocksRef.current = unsubscribe;
+
+    // Cleanup subscription only on unmount
+    return () => {
+      if (unsubscribeLocksRef.current) {
+        unsubscribeLocksRef.current();
+      }
+    };
+  }, []); // Empty deps - subscription should persist for component lifetime
+
+  // Separate effect to unlock shapes on unmount
+  useEffect(() => {
+    return () => {
+      // Unlock any selected shapes on cleanup (batch unlock)
       if (selectedShapeIds.length > 0) {
-        selectedShapeIds.forEach(shapeId => {
-          unlockShapeService(shapeId).catch(err => {});
-        });
+        unlockShapesService(selectedShapeIds).catch(err => {});
       }
     };
   }, [selectedShapeIds]);
@@ -71,48 +94,57 @@ function useShapes(presence = {}) {
     );
 
     // Unlock shapes for each disconnected user
-    disconnectedUserIds.forEach(async (disconnectedUserId) => {
-      try {
-        const count = await unlockShapesForUser(disconnectedUserId);
-      } catch (err) {
-      }
-    });
+    if (disconnectedUserIds.length > 0) {
+      
+      disconnectedUserIds.forEach(async (disconnectedUserId) => {
+        try {
+          const count = await unlockShapesForUser(disconnectedUserId);
+          if (count > 0) {
+          }
+        } catch (err) {
+        }
+      });
+    }
 
     // Update the previous presence reference
     previousPresenceRef.current = currentPresence;
   }, [presence]);
 
   /**
-   * Create a new shape
-   * @param {object} shapeData - Shape properties
-   * @returns {Promise<string>} Created shape ID
+   * Create one or more shapes
+   * @param {object|Array<object>} shapeData - Single shape or array of shapes
+   * @returns {Promise<string|Array<string>>} Created shape ID(s)
    */
-  const createShape = useCallback(async (shapeData) => {
+  const createShapes = useCallback(async (shapeData) => {
     try {
       setError(null);
-      const shapeId = await createShapeService(shapeData);
-      return shapeId;
+      const result = await createShapesService(shapeData);
+      return result;
     } catch (err) {
       setError(err.message);
       throw err;
     }
   }, []);
 
+
   /**
-   * Update an existing shape
-   * @param {string} shapeId - Shape ID
-   * @param {object} updates - Properties to update
+   * Update one or more shapes
+   * @param {string|Array<object>} shapeIdOrUpdates - Shape ID or array of {id, ...updates}
+   * @param {object} [updates] - Properties to update (when first param is string)
    * @returns {Promise<void>}
    */
-  const updateShape = useCallback(async (shapeId, updates) => {
+  const updateShapes = useCallback(async (shapeIdOrUpdates, updates) => {
     try {
       setError(null);
-      await updateShapeService(shapeId, updates);
+      await updateShapesService(shapeIdOrUpdates, updates);
     } catch (err) {
       setError(err.message);
       throw err;
     }
   }, []);
+
+  // Backward compatibility alias
+  const updateShape = updateShapes;
 
   /**
    * Delete a shape
@@ -185,34 +217,45 @@ function useShapes(presence = {}) {
   }, []);
 
   /**
-   * Lock a shape for editing
-   * @param {string} shapeId - Shape ID
-   * @returns {Promise<boolean>} True if lock was successful
+   * Lock one or more shapes for editing
+   * @param {string|string[]} shapeIds - Shape ID(s) to lock
+   * @returns {Promise<string[]>} Array of successfully locked shape IDs
    */
-  const lockShape = useCallback(async (shapeId) => {
+  const lockShapes = useCallback(async (shapeIds) => {
     try {
       setError(null);
-      const success = await lockShapeService(shapeId);
-      return success;
+      const lockedIds = await lockShapesService(shapeIds);
+      return lockedIds;
     } catch (err) {
       setError(err.message);
-      return false;
+      return [];
     }
   }, []);
 
+  // Backward compatibility
+  const lockShape = useCallback(async (shapeId) => {
+    const locked = await lockShapes(shapeId);
+    return locked.length > 0;
+  }, [lockShapes]);
+
   /**
-   * Unlock a shape
-   * @param {string} shapeId - Shape ID
+   * Unlock one or more shapes
+   * @param {string|string[]} shapeIds - Shape ID(s) to unlock
    * @returns {Promise<void>}
    */
-  const unlockShape = useCallback(async (shapeId) => {
+  const unlockShapes = useCallback(async (shapeIds) => {
     try {
       setError(null);
-      await unlockShapeService(shapeId);
+      await unlockShapesService(shapeIds);
     } catch (err) {
       // Don't set error state for unlock failures (graceful degradation)
     }
   }, []);
+
+  // Backward compatibility
+  const unlockShape = useCallback(async (shapeId) => {
+    await unlockShapes(shapeId);
+  }, [unlockShapes]);
 
   /**
    * Select shapes (single or multiple)
@@ -224,8 +267,8 @@ function useShapes(presence = {}) {
       // Handle null (deselect all)
       if (shapeIds === null) {
         setSelectedShapeIds([]);
-        // Unlock in background
-        Promise.all(selectedShapeIds.map(id => unlockShapeService(id))).catch(err => {});
+        // Unlock in background (batch unlock)
+        unlockShapesService(selectedShapeIds).catch(err => {});
         return;
       }
 
@@ -242,13 +285,13 @@ function useShapes(presence = {}) {
             // Already selected, remove it
             newSelection.splice(index, 1);
             // Unlock in background
-            unlockShapeService(id).catch(err => {});
+            unlockShapesService(id).catch(err => {});
           } else {
             // Not selected, add it optimistically
             newSelection.push(id);
             // Lock in background
-            lockShapeService(id).then(success => {
-              if (!success) {
+            lockShapesService(id).then(lockedIds => {
+              if (lockedIds.length === 0) {
                 // Lock failed, remove from selection
                 setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
               }
@@ -262,20 +305,23 @@ function useShapes(presence = {}) {
         // Update UI immediately
         setSelectedShapeIds(idsToSelect);
         
-        // Unlock previously selected shapes that aren't in the new selection (in background)
+        // Unlock previously selected shapes that aren't in the new selection (in background, batch)
         const shapesToUnlock = selectedShapeIds.filter(id => !idsToSelect.includes(id));
-        Promise.all(shapesToUnlock.map(id => unlockShapeService(id))).catch(err => {});
+        if (shapesToUnlock.length > 0) {
+          unlockShapesService(shapesToUnlock).catch(err => {});
+        }
         
-        // Lock newly selected shapes (in background)
+        // Lock newly selected shapes (in background, batch)
         const shapesToLock = idsToSelect.filter(id => !selectedShapeIds.includes(id));
-        shapesToLock.forEach(id => {
-          lockShapeService(id).then(success => {
-            if (!success) {
-              // Lock failed, remove from selection
-              setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+        if (shapesToLock.length > 0) {
+          lockShapesService(shapesToLock).then(lockedIds => {
+            // Remove any shapes that failed to lock
+            if (lockedIds.length !== shapesToLock.length) {
+              const failedLocks = shapesToLock.filter(id => !lockedIds.includes(id));
+              setSelectedShapeIds(prev => prev.filter(id => !failedLocks.includes(id)));
             }
           }).catch(err => {});
-        });
+        }
       }
     } catch (err) {
     }
@@ -290,26 +336,22 @@ function useShapes(presence = {}) {
   }, [selectShapes]);
 
   /**
-   * Check if a shape is locked by another user
+   * Check if a shape is locked by another user (using RTDB lock data)
    * @param {string} shapeId - Shape ID
    * @returns {boolean} True if locked by another user
    */
   const isLockedByOther = useCallback((shapeId) => {
-    const shape = shapes.find(s => s.id === shapeId);
-    if (!shape) return false;
-    return isShapeLockedByOther(shape, userId);
-  }, [shapes, userId]);
+    return isShapeLockedByOtherRTDB(shapeId, shapeLocks, userId);
+  }, [shapeLocks, userId]);
 
   /**
-   * Check if a shape is locked by the current user
+   * Check if a shape is locked by the current user (using RTDB lock data)
    * @param {string} shapeId - Shape ID
    * @returns {boolean} True if locked by current user
    */
   const isLockedByMe = useCallback((shapeId) => {
-    const shape = shapes.find(s => s.id === shapeId);
-    if (!shape) return false;
-    return isShapeLockedByMe(shape, userId);
-  }, [shapes, userId]);
+    return isShapeLockedByMeRTDB(shapeId, shapeLocks, userId);
+  }, [shapeLocks, userId]);
 
   /**
    * Get a shape by ID from local state
@@ -337,13 +379,14 @@ function useShapes(presence = {}) {
     }
 
     // Lock the shape and select it
-    const success = await lockShape(shapeId);
+    const lockedIds = await lockShapes(shapeId);
+    const success = lockedIds.length > 0;
     if (success) {
       // Use setSelectedShapeIds directly to avoid the async selectShapes logic
       setSelectedShapeIds([shapeId]);
     }
     return success;
-  }, [isLockedByOther, isLockedByMe, lockShape]);
+  }, [isLockedByOther, isLockedByMe, lockShapes]);
 
   /**
    * Handle shape drag end - update position
@@ -355,7 +398,7 @@ function useShapes(presence = {}) {
   const handleDragEnd = useCallback(async (shapeId, x, y) => {
     try {
       // Update position in Firestore
-      await updateShape(shapeId, { x, y });
+      await updateShapes(shapeId, { x, y });
       
       // Don't unlock - the shape remains selected and locked
       // It will be unlocked when the user deselects it
@@ -363,25 +406,29 @@ function useShapes(presence = {}) {
     } catch (err) {
       // If update failed, still keep the lock since it's selected
     }
-  }, [updateShape]);
+  }, [updateShapes]);
 
   return {
     // State
     shapes,
+    shapeLocks,     // RTDB lock data
     loading,
     error,
     selectedShapeIds,
     selectedShapeId: selectedShapeIds[0] || null, // For backward compatibility
     
     // Methods
-    createShape,
-    updateShape,
+    createShapes,           // Unified create function (1 or many)
+    updateShapes,           // Unified update function (1 or many)
+    updateShape,            // Backward compatibility
     deleteShape,
     deleteMultipleShapes,
     clearAllShapes,
     clearAllLocks,
-    lockShape,
-    unlockShape,
+    lockShapes,
+    lockShape,      // Backward compatibility
+    unlockShapes,
+    unlockShape,    // Backward compatibility
     selectShape,
     selectShapes,
     

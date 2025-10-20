@@ -73,27 +73,32 @@ function PresencePanel() {
           </div>
         )}
 
-        {/* Other Users */}
+        {/* Other Users - Collapsed Count */}
         {otherUsers.length > 0 && (
           <div className="presence-section">
             <h4 className="section-title">
               Others ({otherUsers.length} online)
             </h4>
-            {otherUsers.map((user) => (
-              <div 
-                key={user.userId} 
-                className="presence-item online"
-              >
-                <div 
-                  className="status-indicator online"
-                  style={{ backgroundColor: user.color }}
-                  title="Online"
-                ></div>
-                <div className="user-details">
-                  <span className="user-name">{user.displayName}</span>
-                </div>
+            <div className="presence-item others-count">
+              <div className="users-stack">
+                {otherUsers.slice(0, 3).map((user, index) => (
+                  <div
+                    key={user.userId}
+                    className="stack-circle"
+                    style={{
+                      backgroundColor: user.color,
+                      zIndex: 3 - index,
+                      marginLeft: index > 0 ? '-8px' : '0'
+                    }}
+                  />
+                ))}
               </div>
-            ))}
+              <div className="user-details">
+                <span className="user-name">
+                  +{otherUsers.length} {otherUsers.length === 1 ? 'user' : 'users'}
+                </span>
+              </div>
+            </div>
           </div>
         )}
 

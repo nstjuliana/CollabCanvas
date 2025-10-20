@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import './ColorPicker.css';
 
 /**
@@ -11,6 +11,13 @@ import './ColorPicker.css';
  */
 function ColorPicker({ selectedColor, onColorChange, disabled = false }) {
   const colorInputRef = useRef(null);
+  const [localColor, setLocalColor] = useState(selectedColor);
+  const debounceTimeoutRef = useRef(null);
+
+  // Update local color when selectedColor changes externally
+  useEffect(() => {
+    setLocalColor(selectedColor);
+  }, [selectedColor]);
 
   const handleButtonClick = () => {
     if (!disabled && colorInputRef.current) {
@@ -19,7 +26,20 @@ function ColorPicker({ selectedColor, onColorChange, disabled = false }) {
   };
 
   const handleColorChange = (e) => {
-    onColorChange(e.target.value);
+    const newColor = e.target.value;
+    
+    // Update local state immediately for smooth UI
+    setLocalColor(newColor);
+
+    // Clear existing timeout
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+
+    // Debounce the callback (200ms delay)
+    debounceTimeoutRef.current = setTimeout(() => {
+      onColorChange(newColor);
+    }, 200);
   };
 
   return (
@@ -32,14 +52,14 @@ function ColorPicker({ selectedColor, onColorChange, disabled = false }) {
       >
         <div 
           className="color-preview" 
-          style={{ backgroundColor: selectedColor }}
+          style={{ backgroundColor: localColor }}
         />
       </button>
 
       <input
         ref={colorInputRef}
         type="color"
-        value={selectedColor}
+        value={localColor || '#000000'}
         onChange={handleColorChange}
         className="color-input-hidden"
       />

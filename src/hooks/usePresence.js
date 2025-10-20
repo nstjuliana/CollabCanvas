@@ -9,6 +9,8 @@ import {
   initializePresence,
   cleanupPresence,
   getUserPresenceColor,
+  resetColorCache,
+  removeUserColor,
 } from '../services/presence';
 import { onConnectionStateChange } from '../services/firebase';
 import { getUserId } from '../services/auth';
@@ -22,7 +24,8 @@ function usePresence() {
   const [presence, setPresence] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+  const [presenceInitialized, setPresenceInitialized] = useState(false);
+
   const unsubscribeRef = useRef(null);
   const unsubscribeConnectionRef = useRef(null);
   const userId = getUserId();
@@ -33,17 +36,25 @@ function usePresence() {
       try {
         if (userId) {
           await initializePresence();
+          setPresenceInitialized(true);
+          // Small delay to ensure presence data is written to Firebase
+          await new Promise(resolve => setTimeout(resolve, 100));
         }
       } catch (err) {
         setError(err.message);
       }
     };
 
-    initialize();
+    if (userId) {
+      initialize();
+    } else {
+      setPresenceInitialized(false);
+    }
 
     // Cleanup on unmount
     return () => {
       cleanupPresence();
+      resetColorCache(); // Reset color cache when user logs out
     };
   }, [userId]);
 
@@ -77,7 +88,12 @@ function usePresence() {
   // Subscribe to real-time presence updates
   // Re-subscribe when connection state changes to ensure reliability
   useEffect(() => {
-    
+    // Only set up subscription if user is authenticated and presence is initialized
+    if (!userId || !presenceInitialized) {
+      setLoading(false);
+      return;
+    }
+
     const setupSubscription = () => {
       // Clean up any existing subscription
       if (unsubscribeRef.current) {
@@ -85,6 +101,17 @@ function usePresence() {
       }
 
       const unsubscribe = subscribeToPresence((updatedPresence) => {
+        // Check for users who have left and remove their colors from cache
+        const currentUserIds = new Set(Object.keys(updatedPresence));
+        const previousUserIds = new Set(Object.keys(presence));
+
+        // Find users who left and remove their colors
+        for (const leftUserId of previousUserIds) {
+          if (!currentUserIds.has(leftUserId)) {
+            removeUserColor(leftUserId);
+          }
+        }
+
         // Add colors to presence
         const presenceWithColors = Object.entries(updatedPresence).reduce((acc, [uid, presenceData]) => {
           acc[uid] = {
@@ -102,7 +129,7 @@ function usePresence() {
       unsubscribeRef.current = unsubscribe;
     };
 
-    // Set up initial subscription
+    // Set up subscription after presence is initialized
     setupSubscription();
 
     // Monitor connection and re-subscribe on reconnection
@@ -114,14 +141,14 @@ function usePresence() {
       wasDisconnected = !connected;
     });
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription on unmount or user change
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
       unsubscribeConnection();
     };
-  }, []);
+  }, [userId, presenceInitialized]); // Re-run when user or initialization state changes
 
   /**
    * Get all users' presence as an array, sorted by display name

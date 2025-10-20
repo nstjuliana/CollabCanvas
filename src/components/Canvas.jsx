@@ -5,6 +5,12 @@ import useShapes from '../hooks/useShapes';
 import useCursors from '../hooks/useCursors';
 import usePresence from '../hooks/usePresence';
 import useUndoRedo, { ACTION_TYPES } from '../hooks/useUndoRedo';
+import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
+import useTextEditing from '../hooks/useTextEditing';
+import useImageUpload from '../hooks/useImageUpload';
+import useMultiSelect from '../hooks/useMultiSelect';
+import useShapeManipulation from '../hooks/useShapeManipulation';
+import useUndoRedoActions from '../hooks/useUndoRedoActions';
 import Shape from './Shape';
 import Cursor from './Cursor';
 import ColorPicker from './ColorPicker';
@@ -22,6 +28,7 @@ import BackgroundLayer from './BackgroundLayer';
 import ShapesLayer from './ShapesLayer';
 import CursorsLayer from './CursorsLayer';
 import AIAgentPanel from './AIAgentPanel';
+import PropertiesPanel from './PropertiesPanel';
 
 function Canvas() {
   const {
@@ -41,12 +48,13 @@ function Canvas() {
 
   const {
     shapes,
+    shapeLocks,
     loading,
     error,
     selectedShapeIds,
     selectedShapeId,
-    createShape,
-    updateShape,
+    createShapes,
+    updateShapes,
     deleteShape,
     deleteMultipleShapes,
     clearAllShapes,
@@ -77,46 +85,192 @@ function Canvas() {
   const containerRef = useRef(null);
   const transformerRef = useRef(null);
   const shapeRefs = useRef({});
-  const isDraggingShapeRef = useRef(false);
-  
+
+  // Use undo/redo actions hook first to get handleUndo/handleRedo
+  const {
+    undoRedoIdMap,
+    handleUndo,
+    handleRedo,
+  } = useUndoRedoActions({
+    canUndo,
+    canRedo,
+    shapes,
+    createShapes,
+    deleteShape,
+    deleteMultipleShapes,
+    selectShape,
+    selectShapes,
+    updateShapes,
+    undoHistory,
+    redoHistory,
+    startUndoRedo,
+    endUndoRedo
+  });
+
+  // Use keyboard shortcuts hook after getting handleUndo/handleRedo
+  useKeyboardShortcuts({
+    selectedShapeIds,
+    shapes,
+    isLockedByOther,
+    deleteShape,
+    deleteMultipleShapes,
+    selectShape,
+    updateShapes,
+    addToHistory,
+    handleUndo,
+    handleRedo,
+    createShapes,
+    selectShapes
+  });
+
+  // Define state variables before hooks that depend on them
+  const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
+  const [selectedColor, setSelectedColor] = useState(DEFAULT_SHAPE_COLOR);
+
   // Track touch events for double-tap detection on mobile
   const lastTapRef = useRef(0);
   const tapTimeoutRef = useRef(null);
-  
+
+  // Create shape at position function (shared between hooks)
+  const createShapeAtPosition = async (canvasPos, text = SHAPE_DEFAULTS.TEXT_DEFAULT) => {
+    try {
+      let x, y;
+      let properties = { color: selectedColor };
+
+      if (selectedTool === TOOL_TYPES.CIRCLE) {
+        // For circles, x/y is the center point, so use canvasPos directly
+        x = canvasPos.x;
+        y = canvasPos.y;
+      } else if (selectedTool === TOOL_TYPES.STAR) {
+        // For stars, x/y is the center point, so use canvasPos directly
+        x = canvasPos.x;
+        y = canvasPos.y;
+      } else if (selectedTool === TOOL_TYPES.TEXT) {
+        // For text, x/y is the top-left corner
+        x = canvasPos.x;
+        y = canvasPos.y;
+        properties.text = text;
+      } else if (selectedTool === TOOL_TYPES.LINE) {
+        // For lines, x/y is the start point, offset to center the line on cursor
+        x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
+        y = canvasPos.y;
+      } else {
+        // For rectangles, x/y is top-left corner, so offset by half width/height to center on cursor
+        x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
+        y = canvasPos.y - SHAPE_DEFAULTS.HEIGHT / 2;
+      }
+
+      // Use shared shape builder - ONE source of truth!
+      const newShape = buildShapeObject(selectedTool, x, y, properties);
+      const shapeId = await createShapes(newShape);
+
+      // Add to history
+      addToHistory({
+        type: ACTION_TYPES.CREATE,
+        data: { shapeId, shapeData: newShape }
+      });
+
+      // Automatically select the newly created shape
+      selectShape(shapeId);
+
+      return shapeId;
+    } catch (err) {
+      return null;
+    }
+  };
+
+  // Use text editing hook first
+  const {
+    isEditingText,
+    editingTextPosition,
+    editingTextValue,
+    setEditingTextValue,
+    editingShapeId,
+    editingTextTransform,
+    textareaRef,
+    startTextEditing,
+    finishTextEditing,
+    cancelTextEditing,
+  } = useTextEditing({
+    stageRef,
+    stageScale,
+    stagePosition,
+    shapeRefs,
+    shapes,
+    updateShapes,
+    deleteShape,
+    unlockShape,
+    createShapeAtPosition,
+    addToHistory
+  });
+
+  // Use shape manipulation hook (depends on startTextEditing from text editing hook)
+  const {
+    isDraggingShapeRef,
+    isClickOnShape,
+    onShapeDragStart,
+    onShapeDragEnd,
+    onShapeClick,
+    onShapeDoubleClick,
+  } = useShapeManipulation({
+    stageRef,
+    selectedTool,
+    selectedColor,
+    shapes,
+    isLockedByOther,
+    createShapes,
+    deleteShape,
+    selectShape,
+    selectShapes,
+    updateShapes,
+    handleShapeDragStart,
+    handleShapeDragEnd,
+    addToHistory,
+    startTextEditing,
+    setSelectedColor,
+    createShapeAtPosition
+  });
+
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
   });
-  
-  const [selectedTool, setSelectedTool] = useState(DEFAULT_TOOL);
-  const [selectedColor, setSelectedColor] = useState(DEFAULT_SHAPE_COLOR);
-  
+
   // Multi-select state
   const [isCtrlPressed, setIsCtrlPressed] = useState(false);
   const [isShiftPressed, setIsShiftPressed] = useState(false);
-  const [selectionBox, setSelectionBox] = useState(null); // { x1, y1, x2, y2 }
-  const [isDrawingSelection, setIsDrawingSelection] = useState(false);
-  const [selectionPreviewIds, setSelectionPreviewIds] = useState([]); // Shapes currently in selection box
-  
-  // Image upload state
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  
-  // Text editing state
-  const [isEditingText, setIsEditingText] = useState(false);
-  const [editingTextPosition, setEditingTextPosition] = useState({ x: 0, y: 0 });
-  const [editingTextCanvasPosition, setEditingTextCanvasPosition] = useState({ x: 0, y: 0 }); // Canvas coordinates
-  const [editingTextValue, setEditingTextValue] = useState('');
-  const [editingShapeId, setEditingShapeId] = useState(null);
-  const [editingTextTransform, setEditingTextTransform] = useState({ 
-    fontSize: SHAPE_DEFAULTS.TEXT_FONT_SIZE, 
-    rotation: 0, 
-    scaleX: 1, 
-    scaleY: 1,
-    width: 100,
-    height: 32,
+
+  // Use multi-select hook
+  const {
+    selectionBox,
+    isDrawingSelection,
+    selectionPreviewIds,
+    isShapeInBox,
+    handleCanvasMouseDown,
+    handleCanvasMouseMove,
+    handleCanvasMouseUp,
+  } = useMultiSelect({
+    stageRef,
+    shapes,
+    isLockedByOther,
+    selectedShapeIds,
+    selectShapes,
+    setSelectedColor,
+    isClickOnShape
   });
-  const textareaRef = useRef(null);
+
+  // Use image upload hook
+  const {
+    isUploadingImage,
+    handleDrop,
+    handleDragOver,
+  } = useImageUpload({
+    stageRef,
+    containerRef,
+    createShapes,
+    selectShape,
+    addToHistory
+  });
 
   // Handle window resize and measure container
   useEffect(() => {
@@ -162,19 +316,6 @@ function Canvas() {
     }
   }, [selectedShapeIds, shapes, isEditingText]);
 
-  // Update text editing position when canvas zooms or pans
-  useEffect(() => {
-    if (isEditingText && stageRef.current) {
-      // Get current stage transform directly
-      const currentScale = stageRef.current.scaleX();
-      const currentPosition = stageRef.current.position();
-      
-      // Recalculate screen position from canvas position
-      const screenX = editingTextCanvasPosition.x * currentScale + currentPosition.x;
-      const screenY = editingTextCanvasPosition.y * currentScale + currentPosition.y;
-      setEditingTextPosition({ x: screenX, y: screenY });
-    }
-  }, [stageScale, stagePosition, isEditingText, editingTextCanvasPosition]);
 
   // Ensure stage dragging is always enabled on mount and cleanup
   useEffect(() => {
@@ -223,316 +364,11 @@ function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete to delete, Escape to deselect, Arrow keys to nudge, Undo/Redo)
-  useEffect(() => {
-    const handleKeyDown = async (e) => {
-      // Don't handle if user is typing in an input field
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
-        return;
-      }
 
-      // Ctrl+Z or Cmd+Z - Undo
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        await handleUndo();
-        return;
-      }
 
-      // Ctrl+Y or Cmd+Y or Ctrl+Shift+Z or Cmd+Shift+Z - Redo
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        await handleRedo();
-        return;
-      }
-
-      // Escape key - deselect all shapes
-      if (e.key === 'Escape' && selectedShapeIds.length > 0) {
-        selectShape(null);
-        return;
-      }
-
-      // Delete or Backspace key - delete selected shapes
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedShapeIds.length > 0) {
-        // Filter out shapes locked by others
-        const shapesToDelete = selectedShapeIds.filter(id => !isLockedByOther(id));
-        
-        if (shapesToDelete.length === 0) {
-          return;
-        }
-
-        // Store shapes for undo before deleting
-        const deletedShapes = shapesToDelete.map(id => shapes.find(s => s.id === id)).filter(Boolean);
-
-        try {
-          if (shapesToDelete.length === 1) {
-            await deleteShape(shapesToDelete[0]);
-            // Add to history
-            addToHistory({
-              type: ACTION_TYPES.DELETE,
-              data: { shape: deletedShapes[0] }
-            });
-          } else {
-            await deleteMultipleShapes(shapesToDelete);
-            // Add to history
-            addToHistory({
-              type: ACTION_TYPES.DELETE_MULTIPLE,
-              data: { shapes: deletedShapes }
-            });
-          }
-        } catch (err) {
-        }
-      }
-
-      // Arrow keys - nudge selected shapes by 1 pixel
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && selectedShapeIds.length > 0) {
-        e.preventDefault(); // Prevent page scrolling
-        
-        // Filter out shapes locked by others
-        const shapesToMove = selectedShapeIds.filter(id => !isLockedByOther(id));
-        
-        if (shapesToMove.length === 0) {
-          return;
-        }
-
-        // Calculate offset based on arrow key
-        let offsetX = 0;
-        let offsetY = 0;
-        
-        switch (e.key) {
-          case 'ArrowUp':
-            offsetY = -1;
-            break;
-          case 'ArrowDown':
-            offsetY = 1;
-            break;
-          case 'ArrowLeft':
-            offsetX = -1;
-            break;
-          case 'ArrowRight':
-            offsetX = 1;
-            break;
-        }
-
-        // Store previous positions for undo
-        const previousStates = shapesToMove.map(id => {
-          const shape = shapes.find(s => s.id === id);
-          return shape ? { id, x: shape.x, y: shape.y } : null;
-        }).filter(Boolean);
-
-        // Update all selected shapes
-        try {
-          await Promise.all(
-            shapesToMove.map(id => {
-              const shape = shapes.find(s => s.id === id);
-              if (shape) {
-                return updateShape(id, {
-                  x: shape.x + offsetX,
-                  y: shape.y + offsetY
-                });
-              }
-            })
-          );
-
-          // Add to history
-          addToHistory({
-            type: ACTION_TYPES.UPDATE,
-            data: {
-              shapeIds: shapesToMove,
-              previousStates: previousStates.map(s => ({ id: s.id, updates: { x: s.x, y: s.y } })),
-              newStates: previousStates.map(s => ({ 
-                id: s.id, 
-                updates: { x: s.x + offsetX, y: s.y + offsetY } 
-              }))
-            }
-          });
-        } catch (err) {
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedShapeIds, shapes, isLockedByOther, deleteShape, deleteMultipleShapes, selectShape, updateShape, addToHistory]);
 
   /**
-   * Handle undo operation
-   */
-  const handleUndo = async () => {
-    if (!canUndo) return;
-
-    startUndoRedo();
-    
-    try {
-      const action = undoHistory();
-      if (!action) return;
-
-      switch (action.type) {
-        case ACTION_TYPES.CREATE: {
-          // Undo create by deleting the shape
-          const { shapeId } = action.data;
-          await deleteShape(shapeId);
-          break;
-        }
-
-        case ACTION_TYPES.DELETE: {
-          // Undo delete by recreating the shape
-          const { shape } = action.data;
-          // Remove id and locks to create fresh shape
-          const { id, lockedBy, lockedAt, ...shapeData } = shape;
-          const newShapeId = await createShape(shapeData);
-          // Update the action data with new ID for potential redo
-          action.data.shapeId = newShapeId;
-          break;
-        }
-
-        case ACTION_TYPES.DELETE_MULTIPLE: {
-          // Undo multiple deletes by recreating all shapes
-          const { shapes: deletedShapes } = action.data;
-          const newShapeIds = [];
-          for (const shape of deletedShapes) {
-            const { id, lockedBy, lockedAt, ...shapeData } = shape;
-            const newShapeId = await createShape(shapeData);
-            newShapeIds.push(newShapeId);
-          }
-          // Update the action data with new IDs for potential redo
-          action.data.shapeIds = newShapeIds;
-          break;
-        }
-
-        case ACTION_TYPES.UPDATE: {
-          // Undo update by restoring previous state
-          const { previousStates } = action.data;
-          await Promise.all(
-            previousStates.map(({ id, updates }) => updateShape(id, updates))
-          );
-          break;
-        }
-
-        default:
-          break;
-      }
-    } finally {
-      endUndoRedo();
-    }
-  };
-
-  /**
-   * Handle redo operation
-   */
-  const handleRedo = async () => {
-    if (!canRedo) return;
-
-    startUndoRedo();
-    
-    try {
-      const action = redoHistory();
-      if (!action) return;
-
-      switch (action.type) {
-        case ACTION_TYPES.CREATE: {
-          // Redo create by creating the shape again
-          const { shapeData } = action.data;
-          const shapeId = await createShape(shapeData);
-          // Update the action data with new ID
-          action.data.shapeId = shapeId;
-          break;
-        }
-
-        case ACTION_TYPES.DELETE: {
-          // Redo delete by deleting the shape again
-          const { shapeId } = action.data;
-          if (shapeId) {
-            await deleteShape(shapeId);
-          }
-          break;
-        }
-
-        case ACTION_TYPES.DELETE_MULTIPLE: {
-          // Redo multiple deletes by deleting all shapes again
-          const { shapeIds } = action.data;
-          if (shapeIds && shapeIds.length > 0) {
-            await deleteMultipleShapes(shapeIds);
-          }
-          break;
-        }
-
-        case ACTION_TYPES.UPDATE: {
-          // Redo update by applying new state
-          const { newStates } = action.data;
-          await Promise.all(
-            newStates.map(({ id, updates }) => updateShape(id, updates))
-          );
-          break;
-        }
-
-        default:
-          break;
-      }
-    } finally {
-      endUndoRedo();
-    }
-  };
-
-  /**
-   * Create a shape at the given position
-   * Uses shared buildShapeObject to ensure consistency between UI and agent
-   */
-  const createShapeAtPosition = async (canvasPos, text = SHAPE_DEFAULTS.TEXT_DEFAULT) => {
-    try {
-      let x, y;
-      let properties = { color: selectedColor };
-      
-      if (selectedTool === TOOL_TYPES.CIRCLE) {
-        // For circles, x/y is the center point, so use canvasPos directly
-        x = canvasPos.x;
-        y = canvasPos.y;
-      } else if (selectedTool === TOOL_TYPES.TEXT) {
-        // For text, x/y is the top-left corner
-        x = canvasPos.x;
-        y = canvasPos.y;
-        properties.text = text;
-      } else {
-        // For rectangles, x/y is top-left corner, so offset by half width/height to center on cursor
-        x = canvasPos.x - SHAPE_DEFAULTS.WIDTH / 2;
-        y = canvasPos.y - SHAPE_DEFAULTS.HEIGHT / 2;
-      }
-
-      // Use shared shape builder - ONE source of truth!
-      const newShape = buildShapeObject(selectedTool, x, y, properties);
-      const shapeId = await createShape(newShape);
-      
-      // Add to history
-      addToHistory({
-        type: ACTION_TYPES.CREATE,
-        data: { shapeId, shapeData: newShape }
-      });
-      
-      return shapeId;
-    } catch (err) {
-      return null;
-    }
-  };
-
-  /**
-   * Check if a click event is on a user-created shape
-   */
-  const isClickOnShape = (e) => {
-    // Check the target and its ancestors for a shape ID
-    let node = e.target;
-    while (node) {
-      if (node.attrs && node.attrs.id && typeof node.attrs.id === 'string') {
-        // Verify it's actually one of our shapes
-        if (shapes.some(s => s.id === node.attrs.id)) {
-          return true;
-        }
-      }
-      node = node.parent;
-    }
-    return false;
-  };
-
-  /**
-   * Handle double-click on canvas to create a new shape
+   * Handle double-click on canvas to create a new shape or start text editing
    */
   const handleCanvasDoubleClick = async (e) => {
     // Don't create shapes when delete tool is active
@@ -549,7 +385,13 @@ function Canvas() {
     const stage = stageRef.current;
     const pointerPosition = stage.getPointerPosition();
     const canvasPos = screenToCanvas(stage, pointerPosition);
-    
+
+    // If text tool is selected, start text editing instead of creating shape
+    if (selectedTool === TOOL_TYPES.TEXT) {
+      startTextEditing(canvasPos.x, canvasPos.y);
+      return;
+    }
+
     await createShapeAtPosition(canvasPos);
   };
 
@@ -576,12 +418,17 @@ function Canvas() {
       const stage = stageRef.current;
       const pointerPosition = stage.getPointerPosition();
       const canvasPos = screenToCanvas(stage, pointerPosition);
-      
-      await createShapeAtPosition(canvasPos);
-      
+
+      // If text tool is selected, start text editing instead of creating shape
+      if (selectedTool === TOOL_TYPES.TEXT) {
+        startTextEditing(canvasPos.x, canvasPos.y);
+      } else {
+        await createShapeAtPosition(canvasPos);
+      }
+
       // Reset to prevent triple-tap from creating another shape
       lastTapRef.current = 0;
-      
+
       // Clear any pending timeout
       if (tapTimeoutRef.current) {
         clearTimeout(tapTimeoutRef.current);
@@ -590,7 +437,7 @@ function Canvas() {
     } else {
       // First tap - record the time
       lastTapRef.current = now;
-      
+
       // Clear after 300ms to reset double-tap detection
       if (tapTimeoutRef.current) {
         clearTimeout(tapTimeoutRef.current);
@@ -601,138 +448,6 @@ function Canvas() {
     }
   };
 
-  // Track shape position before drag for undo
-  const shapeDragStartPosition = useRef({});
-
-  /**
-   * Handle shape drag start
-   */
-  const onShapeDragStart = async (e, shape) => {
-    e.cancelBubble = true; // Prevent canvas drag
-    
-    // Store initial position for undo
-    shapeDragStartPosition.current[shape.id] = { x: shape.x, y: shape.y };
-    
-    // Mark that we're dragging a shape
-    isDraggingShapeRef.current = true;
-    
-    // Disable stage dragging while dragging a shape
-    if (stageRef.current) {
-      stageRef.current.draggable(false);
-    }
-    
-    // Try to lock the shape
-    const success = await handleShapeDragStart(shape.id);
-    
-    // If couldn't lock, prevent drag
-    if (!success) {
-      e.target.stopDrag();
-      isDraggingShapeRef.current = false;
-      // Re-enable stage dragging
-      if (stageRef.current) {
-        stageRef.current.draggable(true);
-      }
-      // Clean up stored position
-      delete shapeDragStartPosition.current[shape.id];
-    }
-  };
-
-  /**
-   * Handle shape drag end
-   */
-  const onShapeDragEnd = async (e, shape) => {
-    e.cancelBubble = true; // Prevent event from bubbling to canvas
-    
-    const node = e.target;
-    const newX = node.x();
-    const newY = node.y();
-    const previousPos = shapeDragStartPosition.current[shape.id];
-    
-    try {
-      await handleShapeDragEnd(shape.id, newX, newY);
-      
-      // Add to history if position actually changed
-      if (previousPos && (previousPos.x !== newX || previousPos.y !== newY)) {
-        addToHistory({
-          type: ACTION_TYPES.UPDATE,
-          data: {
-            shapeIds: [shape.id],
-            previousStates: [{ id: shape.id, updates: { x: previousPos.x, y: previousPos.y } }],
-            newStates: [{ id: shape.id, updates: { x: newX, y: newY } }]
-          }
-        });
-      }
-    } finally {
-      // Mark that we're done dragging
-      isDraggingShapeRef.current = false;
-      
-      // Re-enable stage dragging
-      if (stageRef.current) {
-        stageRef.current.draggable(true);
-      }
-      
-      // Clean up stored position
-      delete shapeDragStartPosition.current[shape.id];
-    }
-  };
-
-  /**
-   * Handle shape click
-   */
-  const onShapeClick = async (e, shape) => {
-    e.cancelBubble = true; // Prevent canvas click
-    
-    // If delete tool is active, delete the shape
-    if (selectedTool === TOOL_TYPES.DELETE) {
-      if (isLockedByOther(shape.id)) {
-        return;
-      }
-      
-      try {
-        await deleteShape(shape.id);
-      } catch (err) {
-      }
-    } else {
-      // Check if shape is locked by another user
-      if (isLockedByOther(shape.id)) {
-        return;
-      }
-      
-      // Handle multi-select with Ctrl/Cmd key
-      if (isCtrlPressed) {
-        // Toggle selection
-        await selectShapes(shape.id, true);
-      } else {
-        // Single selection
-        await selectShape(shape.id);
-        setSelectedColor(shape.fill);
-      }
-    }
-  };
-  
-  /**
-   * Handle shape double-click for text editing
-   */
-  const onShapeDoubleClick = async (e, shape) => {
-    e.cancelBubble = true; // Prevent canvas double-click
-    
-    // Only allow editing text shapes
-    if (shape.type !== SHAPE_TYPES.TEXT) return;
-    
-    // Check if shape is locked by another user
-    if (isLockedByOther(shape.id)) {
-      return;
-    }
-    
-    // Lock the shape for editing
-    const success = await handleShapeDragStart(shape.id);
-    if (!success) {
-      return;
-    }
-    
-    // Start text editing
-    startTextEditing(shape.x, shape.y, shape);
-  };
 
   /**
    * Handle color change from color picker
@@ -756,9 +471,9 @@ function Canvas() {
       }).filter(Boolean);
 
       try {
-        // Update all selected shapes
-        await Promise.all(
-          shapesToUpdate.map(id => updateShape(id, { fill: newColor }))
+        // Update all selected shapes with a single batch write
+        await updateShapes(
+          shapesToUpdate.map(id => ({ id, fill: newColor }))
         );
 
         // Add to history
@@ -776,305 +491,20 @@ function Canvas() {
   };
 
   /**
-   * Handle canvas click for text tool or deselecting shapes
+   * Handle canvas click for deselecting shapes
    */
   const handleCanvasClick = async (e) => {
     // Check if we clicked on a user-created shape
     const clickedOnShape = isClickOnShape(e);
-    
-    // If text tool is selected and we didn't click on a shape, start text editing
-    if (selectedTool === TOOL_TYPES.TEXT && !clickedOnShape) {
-      const stage = stageRef.current;
-      const pointerPosition = stage.getPointerPosition();
-      const canvasPos = screenToCanvas(stage, pointerPosition);
-      
-      // Start text editing at click position
-      startTextEditing(canvasPos.x, canvasPos.y);
-      return;
-    }
-    
+
     // If we didn't click on a shape and have a selection, deselect it (unless Ctrl is pressed)
     if (!clickedOnShape && selectedShapeIds.length > 0 && !isCtrlPressed) {
       selectShape(null);
     }
   };
 
-  /**
-   * Handle mouse down on canvas for selection box (Shift+Drag)
-   */
-  const handleCanvasMouseDown = (e) => {
-    // Only start selection box on Shift+Drag
-    if (!isShiftPressed) return;
-    
-    // Don't start selection box if clicking on a shape
-    if (isClickOnShape(e)) return;
 
-    const stage = stageRef.current;
-    const pointerPosition = stage.getPointerPosition();
-    const canvasPos = screenToCanvas(stage, pointerPosition);
-
-    setIsDrawingSelection(true);
-    setSelectionBox({
-      x1: canvasPos.x,
-      y1: canvasPos.y,
-      x2: canvasPos.x,
-      y2: canvasPos.y,
-    });
-  };
-
-  /**
-   * Check if a shape is within a selection box
-   */
-  const isShapeInBox = (shape, x1, y1, x2, y2) => {
-    // Get shape bounds
-    let shapeX1, shapeY1, shapeX2, shapeY2;
-    
-    if (shape.type === SHAPE_TYPES.CIRCLE) {
-      // For circles, x/y is center
-      const radius = Math.max(shape.width, shape.height) / 2;
-      shapeX1 = shape.x - radius;
-      shapeY1 = shape.y - radius;
-      shapeX2 = shape.x + radius;
-      shapeY2 = shape.y + radius;
-    } else if (shape.type === SHAPE_TYPES.TEXT) {
-      // For text, approximate bounds
-      shapeX1 = shape.x;
-      shapeY1 = shape.y;
-      shapeX2 = shape.x + 100; // Approximate
-      shapeY2 = shape.y + (shape.fontSize || 24);
-    } else {
-      // For rectangles and images, x/y is top-left
-      shapeX1 = shape.x;
-      shapeY1 = shape.y;
-      shapeX2 = shape.x + shape.width;
-      shapeY2 = shape.y + shape.height;
-    }
-
-    // Check if shape intersects with selection box
-    return !(shapeX2 < x1 || shapeX1 > x2 || shapeY2 < y1 || shapeY1 > y2);
-  };
-
-  /**
-   * Handle mouse move on canvas for selection box
-   */
-  const handleCanvasMouseMove = (e) => {
-    if (!isDrawingSelection || !selectionBox) return;
-
-    const stage = stageRef.current;
-    const pointerPosition = stage.getPointerPosition();
-    const canvasPos = screenToCanvas(stage, pointerPosition);
-
-    const newBox = {
-      ...selectionBox,
-      x2: canvasPos.x,
-      y2: canvasPos.y,
-    };
-
-    setSelectionBox(newBox);
-
-    // Calculate preview of shapes in selection box
-    const x1 = Math.min(newBox.x1, newBox.x2);
-    const y1 = Math.min(newBox.y1, newBox.y2);
-    const x2 = Math.max(newBox.x1, newBox.x2);
-    const y2 = Math.max(newBox.y1, newBox.y2);
-
-    const shapesInBox = shapes
-      .filter(shape => isShapeInBox(shape, x1, y1, x2, y2))
-      .map(s => s.id)
-      .filter(id => !isLockedByOther(id));
-
-    setSelectionPreviewIds(shapesInBox);
-  };
-
-  /**
-   * Handle mouse up on canvas for selection box
-   */
-  const handleCanvasMouseUp = async () => {
-    if (!isDrawingSelection || !selectionBox) return;
-
-    setIsDrawingSelection(false);
-
-    // Calculate selection box bounds
-    const x1 = Math.min(selectionBox.x1, selectionBox.x2);
-    const y1 = Math.min(selectionBox.y1, selectionBox.y2);
-    const x2 = Math.max(selectionBox.x1, selectionBox.x2);
-    const y2 = Math.max(selectionBox.y1, selectionBox.y2);
-
-    // Find shapes within selection box using helper
-    const shapesInBox = shapes.filter(shape => isShapeInBox(shape, x1, y1, x2, y2));
-
-    // Filter out shapes locked by others
-    const selectableShapes = shapesInBox
-      .map(s => s.id)
-      .filter(id => !isLockedByOther(id));
-
-    // Clear selection box and preview immediately for instant feedback
-    setSelectionBox(null);
-    setSelectionPreviewIds([]);
-
-    if (selectableShapes.length > 0) {
-      if (isCtrlPressed) {
-        // Add to existing selection
-        const newSelection = [...new Set([...selectedShapeIds, ...selectableShapes])];
-        // Don't await - let it happen in background for instant UI feedback
-        selectShapes(newSelection, false);
-      } else {
-        // Replace selection
-        // Don't await - let it happen in background for instant UI feedback
-        selectShapes(selectableShapes, false);
-      }
-    }
-  };
   
-  /**
-   * Start text editing at a position
-   */
-  const startTextEditing = (x, y, existingShape = null) => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    
-    // Get the actual text node to measure dimensions
-    let textWidth = 100;
-    let textHeight = 32;
-    if (existingShape?.id) {
-      const textNode = shapeRefs.current[existingShape.id];
-      if (textNode) {
-        // For text in a Group, find the actual Text node
-        const actualTextNode = textNode.findOne('Text');
-        if (actualTextNode) {
-          textWidth = actualTextNode.width();
-          textHeight = actualTextNode.height();
-        }
-      }
-    }
-    
-    // Get current stage transform directly from the stage (most up-to-date)
-    const currentScale = stage.scaleX();
-    const currentPosition = stage.position();
-    
-    // Store canvas coordinates (not screen coordinates)
-    setEditingTextCanvasPosition({ x, y });
-    
-    // Convert canvas position to screen position for textarea
-    const screenX = x * currentScale + currentPosition.x;
-    const screenY = y * currentScale + currentPosition.y;
-    
-    // Capture transformation properties for inline editing
-    const transform = {
-      fontSize: existingShape?.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE,
-      rotation: existingShape?.rotation || 0,
-      scaleX: existingShape?.scaleX || 1,
-      scaleY: existingShape?.scaleY || 1,
-      width: textWidth,
-      height: textHeight,
-    };
-    
-    setEditingTextPosition({ x: screenX, y: screenY });
-    setEditingTextValue(existingShape?.text || '');
-    setEditingShapeId(existingShape?.id || null);
-    setEditingTextTransform(transform);
-    setIsEditingText(true);
-    
-    // Focus textarea after state update
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.select();
-      }
-    }, 0);
-  };
-  
-  /**
-   * Finish text editing and save
-   */
-  const finishTextEditing = async () => {
-    if (!isEditingText) return;
-    
-    const text = editingTextValue.trim();
-    const wasEditingExisting = editingShapeId !== null;
-    
-    // Only save if there's text
-    if (text) {
-      if (editingShapeId) {
-        // Update existing text shape
-        const shape = shapes.find(s => s.id === editingShapeId);
-        const previousText = shape?.text || '';
-        
-        try {
-          await updateShape(editingShapeId, { text });
-          
-          // Add to history only if text actually changed
-          if (previousText !== text) {
-            addToHistory({
-              type: ACTION_TYPES.UPDATE,
-              data: {
-                shapeIds: [editingShapeId],
-                previousStates: [{ id: editingShapeId, updates: { text: previousText } }],
-                newStates: [{ id: editingShapeId, updates: { text } }]
-              }
-            });
-          }
-        } catch (err) {
-        }
-      } else {
-        // Create new text shape at the clicked position
-        const stage = stageRef.current;
-        if (stage) {
-          // Convert screen position back to canvas position
-          const canvasX = (editingTextPosition.x - stagePosition.x) / stageScale;
-          const canvasY = (editingTextPosition.y - stagePosition.y) / stageScale;
-          
-          await createShapeAtPosition({ x: canvasX, y: canvasY }, text);
-        }
-      }
-    } else if (editingShapeId) {
-      // If text is empty and we're editing an existing shape, delete it
-      const shape = shapes.find(s => s.id === editingShapeId);
-      
-      try {
-        await deleteShape(editingShapeId);
-        
-        // Add to history
-        if (shape) {
-          addToHistory({
-            type: ACTION_TYPES.DELETE,
-            data: { shape }
-          });
-        }
-      } catch (err) {
-      }
-    }
-    
-    // Unlock the shape if we were editing an existing one
-    if (wasEditingExisting && editingShapeId) {
-      try {
-        await unlockShape(editingShapeId);
-      } catch (err) {
-      }
-    }
-    
-    // Reset editing state
-    setIsEditingText(false);
-    setEditingTextValue('');
-    setEditingShapeId(null);
-  };
-  
-  /**
-   * Cancel text editing
-   */
-  const cancelTextEditing = async () => {
-    // Unlock the shape if we were editing an existing one
-    if (editingShapeId) {
-      try {
-        await unlockShape(editingShapeId);
-      } catch (err) {
-      }
-    }
-    
-    setIsEditingText(false);
-    setEditingTextValue('');
-    setEditingShapeId(null);
-  };
 
   /**
    * Handle mouse move to update cursor position and selection box
@@ -1089,7 +519,7 @@ function Canvas() {
 
     // Convert to canvas coordinates
     const canvasPos = screenToCanvas(stage, pointerPosition);
-    
+
     // Update cursor position in Realtime Database (throttled in hook)
     updateCursorPosition(canvasPos.x, canvasPos.y);
 
@@ -1118,105 +548,6 @@ function Canvas() {
   /**
    * Load image from file and get dimensions
    */
-  const loadImageFromFile = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          resolve({
-            width: img.width,
-            height: img.height,
-          });
-        };
-        img.onerror = () => reject(new Error('Failed to load image'));
-        img.src = e.target.result;
-      };
-      reader.onerror = () => reject(new Error('Failed to read file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  /**
-   * Handle image drop
-   */
-  const handleDrop = async (e) => {
-    e.preventDefault();
-    
-    // Get the dropped files
-    const files = Array.from(e.dataTransfer.files);
-    const imageFiles = files.filter(file => file.type.startsWith('image/'));
-    
-    if (imageFiles.length === 0) {
-      return;
-    }
-
-    // Get drop position on canvas
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    // Get the drop position relative to the canvas
-    const canvasContainer = containerRef.current;
-    const rect = canvasContainer.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    const canvasPos = screenToCanvas(stage, { x, y });
-
-    // Upload and create shapes for each image
-    for (const file of imageFiles) {
-      try {
-        setIsUploadingImage(true);
-
-        // Get image dimensions from file BEFORE uploading (avoids CORS issue)
-        const { width: imgWidth, height: imgHeight } = await loadImageFromFile(file);
-
-        // Calculate scaled dimensions
-        const { width, height } = calculateScaledDimensions(
-          imgWidth,
-          imgHeight,
-          SHAPE_DEFAULTS.IMAGE_MAX_WIDTH,
-          SHAPE_DEFAULTS.IMAGE_MAX_HEIGHT
-        );
-
-        // Upload to Firebase Storage
-        const imageUrl = await uploadImage(file);
-
-        // Create image shape at drop position
-        const newShape = {
-          type: SHAPE_TYPES.IMAGE,
-          x: canvasPos.x - width / 2, // Center on cursor
-          y: canvasPos.y - height / 2,
-          width,
-          height,
-          imageUrl,
-          opacity: SHAPE_DEFAULTS.OPACITY,
-          rotation: 0,
-          scaleX: 1,
-          scaleY: 1,
-        };
-
-        const shapeId = await createShape(newShape);
-        
-        // Add to history
-        addToHistory({
-          type: ACTION_TYPES.CREATE,
-          data: { shapeId, shapeData: newShape }
-        });
-      } catch (err) {
-        alert(`Failed to upload ${file.name}: ${err.message}`);
-      } finally {
-        setIsUploadingImage(false);
-      }
-    }
-  };
-
-  /**
-   * Handle drag over (required to enable drop)
-   */
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  };
 
   /**
    * Handle transform start - lock the shapes
@@ -1254,67 +585,178 @@ function Canvas() {
   const handleTransformEnd = async (e) => {
     if (selectedShapeIds.length === 0) return;
     
-    const node = e.target;
-    
     try {
-      // Find which shape was transformed
-      const transformedShapeId = node.attrs?.id;
-      const shape = shapes.find(s => s.id === transformedShapeId);
-      
-      if (!shape) return;
+      // When multiple shapes are selected, we need to update all of them
+      const allPreviousStates = [];
+      const allNewStates = [];
+      const updatesToApply = [];
 
-      // Store previous state for undo
-      const previousState = {
-        x: shape.x,
-        y: shape.y,
-        rotation: shape.rotation,
-        width: shape.width,
-        height: shape.height,
-        scaleX: shape.scaleX,
-        scaleY: shape.scaleY,
-      };
+      // Iterate through all selected shapes
+      for (const shapeId of selectedShapeIds) {
+        const shape = shapes.find(s => s.id === shapeId);
+        const node = shapeRefs.current[shapeId];
+        
+        if (!shape || !node) continue;
 
-      // Get the transformed dimensions and rotation
-      const updates = {
-        x: node.x(),
-        y: node.y(),
-        rotation: node.rotation(),
-      };
+        // Store previous state for undo
+        const previousState = {
+          x: shape.x,
+          y: shape.y,
+          rotation: shape.rotation,
+          width: shape.width,
+          height: shape.height,
+          scaleX: shape.scaleX,
+          scaleY: shape.scaleY,
+          // Include star-specific properties
+          ...(shape.type === SHAPE_TYPES.STAR && {
+            innerRadius: shape.innerRadius,
+            outerRadius: shape.outerRadius,
+          }),
+          // Include line-specific properties
+          ...(shape.type === SHAPE_TYPES.LINE && {
+            points: shape.points,
+            strokeWidth: shape.strokeWidth,
+          }),
+        };
 
+        // Get the transformed dimensions and rotation
+        const updates = {
+          x: node.x(),
+          y: node.y(),
+          rotation: node.rotation(),
+        };
 
-      // Bake scaling into dimensions for rectangles and circles; preserve scale for text
-  if (shape.type === SHAPE_TYPES.RECTANGLE || shape.type === SHAPE_TYPES.CIRCLE) {
-    const newWidth = node.width() * node.scaleX();
-    const newHeight = node.height() * node.scaleY();
-    
-    updates.width = newWidth;
-    updates.height = newHeight;
-    
-    // Update the node's dimensions immediately to prevent flicker
-    node.width(newWidth);
-    node.height(newHeight);
-    
-    // Reset scale to 1 after applying it to width/height
-    node.scaleX(1);
-    node.scaleY(1);
-  } else if (shape.type === SHAPE_TYPES.TEXT || shape.type === SHAPE_TYPES.IMAGE) {
-    // For text and images, preserve independent scaleX and scaleY for distortion/resizing
-    updates.scaleX = node.scaleX();
-    updates.scaleY = node.scaleY();
-  }
+        // Bake scaling into dimensions for rectangles and circles; preserve scale for text
+        if (shape.type === SHAPE_TYPES.RECTANGLE || shape.type === SHAPE_TYPES.CIRCLE) {
+          const newWidth = node.width() * node.scaleX();
+          const newHeight = node.height() * node.scaleY();
 
-      // Update shape in Firestore
-      await updateShape(transformedShapeId, updates);
+          updates.width = newWidth;
+          updates.height = newHeight;
 
-      // Add to history
-      addToHistory({
-        type: ACTION_TYPES.UPDATE,
-        data: {
-          shapeIds: [transformedShapeId],
-          previousStates: [{ id: transformedShapeId, updates: previousState }],
-          newStates: [{ id: transformedShapeId, updates }]
+          // Update the node's dimensions immediately to prevent flicker
+          node.width(newWidth);
+          node.height(newHeight);
+
+          // Reset scale to 1 after applying it to width/height
+          node.scaleX(1);
+          node.scaleY(1);
+        } else if (shape.type === SHAPE_TYPES.STAR) {
+          // For stars, calculate new radius values from the applied scaling
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+          const avgScale = (scaleX + scaleY) / 2; // Use average scale for uniform scaling
+
+          // Get current radius values or calculate from dimensions
+          const currentInnerRadius = shape.innerRadius || (Math.min(shape.width, shape.height) / 2) * 0.5;
+          const currentOuterRadius = shape.outerRadius || Math.min(shape.width, shape.height) / 2;
+
+          // Apply scaling to radii
+          const newInnerRadius = currentInnerRadius * avgScale;
+          const newOuterRadius = currentOuterRadius * avgScale;
+
+          updates.innerRadius = newInnerRadius;
+          updates.outerRadius = newOuterRadius;
+
+          // Update the node's scale back to 1
+          node.scaleX(1);
+          node.scaleY(1);
+
+          // Update width/height to match the new scaled dimensions for consistency
+          const newWidth = node.width() * scaleX;
+          const newHeight = node.height() * scaleY;
+          updates.width = newWidth;
+          updates.height = newHeight;
+          node.width(newWidth);
+          node.height(newHeight);
+
+        } else if (shape.type === SHAPE_TYPES.LINE) {
+          // For lines, we need to bake the scale into the points array
+          const scaleX = node.scaleX();
+          const scaleY = node.scaleY();
+          const originalPoints = node.points();
+
+          // Ensure we have valid points
+          if (!originalPoints || originalPoints.length < 2) {
+            continue; // Skip this shape if no valid points
+          }
+
+          // Apply scale to each point coordinate
+          const scaledPoints = [];
+          for (let i = 0; i < originalPoints.length; i += 2) {
+            scaledPoints.push(originalPoints[i] * scaleX);      // x coordinate
+            scaledPoints.push(originalPoints[i + 1] * scaleY);  // y coordinate
+          }
+
+          updates.points = scaledPoints;
+          // Reset scale to 1 since we baked it into the points
+          updates.scaleX = 1;
+          updates.scaleY = 1;
+
+          // For lines, calculate the new stroke width based on scaling
+          // Use average of scaleX and scaleY for uniform stroke width scaling
+          const avgScale = (Math.abs(scaleX) + Math.abs(scaleY)) / 2;
+          const newStrokeWidth = shape.strokeWidth * avgScale;
+          updates.strokeWidth = newStrokeWidth;
+
+          // For lines, calculate width/height based on the scaled points span
+          // This ensures the line's bounding box is correct
+          const xs = [];
+          const ys = [];
+          for (let i = 0; i < scaledPoints.length; i += 2) {
+            xs.push(scaledPoints[i]);
+            ys.push(scaledPoints[i + 1]);
+          }
+
+          if (xs.length > 0 && ys.length > 0) {
+            const minX = Math.min(...xs);
+            const maxX = Math.max(...xs);
+            const minY = Math.min(...ys);
+            const maxY = Math.max(...ys);
+
+            const calculatedWidth = Math.abs(maxX - minX) || 1;
+            const calculatedHeight = Math.abs(maxY - minY) || 1;
+
+            updates.width = calculatedWidth;
+            updates.height = calculatedHeight;
+
+            // Update the node's width/height to match the calculated dimensions
+            node.width(calculatedWidth);
+            node.height(calculatedHeight);
+          }
+
+          // Reset scale to 1 and update node for immediate visual feedback
+          node.scaleX(1);
+          node.scaleY(1);
+          node.points(scaledPoints);
+          node.strokeWidth(newStrokeWidth);
+
+        } else if (shape.type === SHAPE_TYPES.TEXT || shape.type === SHAPE_TYPES.IMAGE) {
+          // For text and images, preserve independent scaleX and scaleY for distortion/resizing
+          updates.scaleX = node.scaleX();
+          updates.scaleY = node.scaleY();
         }
-      });
+
+        // Store for batch update
+        allPreviousStates.push({ id: shapeId, updates: previousState });
+        allNewStates.push({ id: shapeId, updates });
+        updatesToApply.push({ id: shapeId, ...updates });
+      }
+
+      // Batch update all shapes in Firestore
+      if (updatesToApply.length > 0) {
+        await updateShapes(updatesToApply);
+
+        // Add to history
+        addToHistory({
+          type: ACTION_TYPES.UPDATE,
+          data: {
+            shapeIds: selectedShapeIds,
+            previousStates: allPreviousStates,
+            newStates: allNewStates
+          }
+        });
+      }
       
     } catch (err) {
     } finally {
@@ -1349,9 +791,22 @@ function Canvas() {
         handleClearCanvas={handleClearCanvas}
       />
 
-      <ShapeCount shapesLength={shapes.length} activeCursorCount={activeCursorCount} />
+      <ShapeCount shapesLength={shapes.length} />
 
-      <AIAgentPanel shapes={shapes} />
+      <AIAgentPanel 
+        shapes={shapes} 
+        selectedShapeIds={selectedShapeIds}
+        deleteShape={deleteShape}
+        selectShape={selectShape}
+      />
+
+      <PropertiesPanel
+        selectedShapeIds={selectedShapeIds}
+        shapes={shapes}
+        updateShapes={updateShapes}
+        isLockedByOther={isLockedByOther}
+        addToHistory={addToHistory}
+      />
 
       <Stage
         ref={stageRef}
@@ -1364,8 +819,8 @@ function Canvas() {
         draggable={!isShiftPressed && !isDrawingSelection}
         onWheel={handleWheel}
         onMouseMove={handleMouseMove}
-        onMouseDown={handleCanvasMouseDown}
-        onMouseUp={handleCanvasMouseUp}
+        onMouseDown={(e) => handleCanvasMouseDown(e, isShiftPressed)}
+        onMouseUp={() => handleCanvasMouseUp(isCtrlPressed)}
         onDragStart={(e) => {
           if (!isDraggingShapeRef.current && !isDrawingSelection) {
             handleCanvasDragStart(e);
@@ -1385,6 +840,7 @@ function Canvas() {
 
         <ShapesLayer
           shapes={shapes}
+          shapeLocks={shapeLocks}
           selectedShapeIds={selectedShapeIds}
           isLockedByOther={isLockedByOther}
           presence={presence}
@@ -1395,7 +851,7 @@ function Canvas() {
           selectionPreviewIds={selectionPreviewIds}
           onShapeDragStart={onShapeDragStart}
           onShapeDragEnd={onShapeDragEnd}
-          onShapeClick={onShapeClick}
+          onShapeClick={(e, shape) => onShapeClick(e, shape, isCtrlPressed)}
           onShapeDoubleClick={onShapeDoubleClick}
           handleTransformStart={handleTransformStart}
           handleTransformEnd={handleTransformEnd}

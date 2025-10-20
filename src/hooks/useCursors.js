@@ -14,6 +14,7 @@ import {
 import { onConnectionStateChange } from '../services/firebase';
 import { getUserId } from '../services/auth';
 import { PRESENCE_COLORS, CURSOR_CONFIG } from '../utils/constants';
+import usePresence from './usePresence';
 
 /**
  * Custom hook for managing cursors
@@ -23,17 +24,69 @@ function useCursors() {
   const [cursors, setCursors] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   const unsubscribeRef = useRef(null);
   const unsubscribeConnectionRef = useRef(null);
   const lastUpdateTimeRef = useRef(0);
   const userId = getUserId();
+
+  // Use presence hook to ensure color synchronization
+  const { presence } = usePresence();
+
+  // Update cursor colors when presence data changes
+  useEffect(() => {
+    if (Object.keys(presence).length > 0) {
+      setCursors(prevCursors => {
+        const updatedCursors = { ...prevCursors };
+
+        // Update colors for cursors that have corresponding presence data
+        Object.entries(presence).forEach(([uid, presenceData]) => {
+          if (presenceData.color) {
+            // Update existing cursor or add current user's cursor color
+            if (updatedCursors[uid]) {
+              updatedCursors[uid] = {
+                ...updatedCursors[uid],
+                color: presenceData.color,
+              };
+            } else if (uid === userId) {
+              // Add current user's cursor with presence color
+              updatedCursors[uid] = {
+                userId: uid,
+                displayName: presenceData.displayName,
+                color: presenceData.color,
+                x: 0,
+                y: 0,
+                lastUpdate: Date.now(),
+              };
+            }
+          }
+        });
+
+        return updatedCursors;
+      });
+    }
+  }, [presence, userId]);
 
   // Initialize cursor tracking on mount
   useEffect(() => {
     const initialize = async () => {
       try {
         await initializeCursor();
+
+        // Ensure current user's cursor color is set from presence data
+        if (userId && presence[userId] && presence[userId].color) {
+          setCursors(prevCursors => ({
+            ...prevCursors,
+            [userId]: {
+              userId,
+              displayName: presence[userId].displayName,
+              color: presence[userId].color,
+              x: 0,
+              y: 0,
+              lastUpdate: Date.now(),
+            }
+          }));
+        }
       } catch (err) {
         setError(err.message);
       }
@@ -47,7 +100,7 @@ function useCursors() {
     return () => {
       cleanupCursor();
     };
-  }, [userId]);
+  }, [userId, presence]);
 
   // Monitor connection state and re-initialize cursor on reconnection
   useEffect(() => {
@@ -87,12 +140,25 @@ function useCursors() {
       }
 
       const unsubscribe = subscribeToCursors((updatedCursors) => {
-        // Add colors to cursors
+        // Add colors to cursors - use presence colors when available for consistency
         const cursorsWithColors = Object.entries(updatedCursors).reduce((acc, [uid, cursor]) => {
-          acc[uid] = {
-            ...cursor,
-            color: getUserCursorColor(uid, PRESENCE_COLORS),
-          };
+          // Check if we have presence data for this user (which has the assigned color)
+          const presenceData = presence[uid];
+
+          if (presenceData && presenceData.color) {
+            // Use the color from presence data for perfect synchronization
+            acc[uid] = {
+              ...cursor,
+              color: presenceData.color,
+            };
+          } else {
+            // Fallback to cursor color assignment (shouldn't happen with proper timing)
+            acc[uid] = {
+              ...cursor,
+              color: getUserCursorColor(uid, PRESENCE_COLORS),
+            };
+          }
+
           return acc;
         }, {});
 
@@ -123,7 +189,7 @@ function useCursors() {
       }
       unsubscribeConnection();
     };
-  }, []);
+  }, [presence]); // IMPORTANT: Must include presence to update color mapping
 
   /**
    * Update the current user's cursor position

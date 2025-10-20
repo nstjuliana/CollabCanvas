@@ -9,7 +9,7 @@ import { useState, useRef, useEffect } from 'react';
 import { processAgentCommand } from '../services/agentExecutor';
 import './AIAgentPanel.css';
 
-function AIAgentPanel({ shapes }) {
+function AIAgentPanel({ shapes, selectedShapeIds = [], deleteShape, selectShape }) {
   const [command, setCommand] = useState('');
   const [history, setHistory] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -56,7 +56,7 @@ function AIAgentPanel({ shapes }) {
 
     try {
       // Process command through AI agent with streaming
-      const result = await processAgentCommand(userCommand, shapes, {
+      const result = await processAgentCommand(userCommand, shapes, selectedShapeIds, { deleteShape, selectShape }, {
         // Stream text chunks as they arrive
         onChunk: (chunk) => {
           setHistory(prev => {
@@ -127,10 +127,10 @@ function AIAgentPanel({ shapes }) {
    */
   const exampleCommands = [
     'Create a red square at (200, 200)',
+    'Move the blue square to the middle',
+    'Move any circle to the top-left',
     'Create a grid of 4 blue circles',
-    'Move the leftmost rectangle 50px to the right',
     'Change all red shapes to green',
-    'Delete the text on the bottom',
   ];
 
   const handleExampleClick = (exampleCommand) => {
@@ -185,44 +185,61 @@ function AIAgentPanel({ shapes }) {
                 </ul>
               </div>
             ) : (
-              history.map((entry, index) => (
-                <div 
-                  key={index} 
-                  className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''} ${entry.streaming ? 'ai-message-streaming' : ''}`}
-                >
-                  <div className="ai-message-content">
-                    {entry.content || (entry.streaming ? '...' : '')}
-                    {entry.streaming && <span className="ai-cursor">▊</span>}
-                  </div>
-                  {entry.toolCalls && entry.toolCalls.length > 0 && (
-                    <div className="ai-message-details">
-                      {entry.toolCalls.map((toolCall, i) => (
-                        <div key={i} className="ai-detail">
-                          <code>{toolCall.function}</code>
-                          {toolCall.result && (
-                            <span className="ai-detail-result">
-                              {Array.isArray(toolCall.result) 
-                                ? `(${toolCall.result.length} ${toolCall.result.length === 1 ? 'item' : 'items'})`
-                                : typeof toolCall.result === 'string'
-                                ? '✓'
-                                : JSON.stringify(toolCall.result).substring(0, 50)
-                              }
-                            </span>
-                          )}
-                        </div>
-                      ))}
+              history.map((entry, index) => {
+                // Don't show empty streaming messages - the loading indicator will show instead
+                if (entry.streaming && !entry.content && (!entry.toolCalls || entry.toolCalls.length === 0)) {
+                  return null;
+                }
+                
+                return (
+                  <div 
+                    key={index} 
+                    className={`ai-message ai-message-${entry.type} ${entry.success === false ? 'ai-message-error' : ''} ${entry.streaming ? 'ai-message-streaming' : ''}`}
+                  >
+                    <div className="ai-message-content">
+                      {entry.content}
+                      {entry.streaming && entry.content && <span className="ai-cursor">▊</span>}
                     </div>
-                  )}
-                </div>
-              ))
+                    {entry.toolCalls && entry.toolCalls.length > 0 && (
+                      <div className="ai-message-details">
+                        {entry.toolCalls.map((toolCall, i) => (
+                          <div key={i} className="ai-detail">
+                            <code>{toolCall.function}</code>
+                            {toolCall.result && (
+                              <span className="ai-detail-result">
+                                {Array.isArray(toolCall.result) 
+                                  ? `(${toolCall.result.length} ${toolCall.result.length === 1 ? 'item' : 'items'})`
+                                  : typeof toolCall.result === 'string'
+                                  ? '✓'
+                                  : JSON.stringify(toolCall.result).substring(0, 50)
+                                }
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
-            {isProcessing && (
-              <div className="ai-message ai-message-agent ai-message-loading">
-                <div className="ai-loading-dots">
-                  <span>.</span><span>.</span><span>.</span>
+            {isProcessing && (() => {
+              // Hide loading indicator if the last message is streaming and has content or tool calls
+              const lastMessage = history[history.length - 1];
+              const hasStreamingContent = lastMessage?.streaming && (lastMessage?.content || (lastMessage?.toolCalls && lastMessage?.toolCalls.length > 0));
+              
+              if (hasStreamingContent) {
+                return null;
+              }
+              
+              return (
+                <div className="ai-message ai-message-agent ai-message-loading">
+                  <div className="ai-loading-dots">
+                    <span>.</span><span>.</span><span>.</span>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* Example commands */}

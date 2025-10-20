@@ -232,6 +232,12 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.text = properties.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
     shapeData.fontSize = properties.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
     shapeData.fontFamily = properties.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+  } else if (normalizedType === SHAPE_TYPES.IMAGE) {
+    // Image shapes require imageUrl and scaleX/scaleY
+    shapeData.imageUrl = properties.imageUrl || '';
+    shapeData.scaleX = properties.scaleX ?? 1;
+    shapeData.scaleY = properties.scaleY ?? 1;
+    delete shapeData.fill; // Images don't have fill
   } else if (normalizedType === SHAPE_TYPES.RECTANGLE) {
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;

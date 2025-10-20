@@ -40,6 +40,7 @@ function PropertiesPanel({
         height: Math.round(selectedShape.height) || 0,
         rotation: Math.round(selectedShape.rotation || 0),
         fill: selectedShape.fill || '#FF6B6B',
+        stroke: selectedShape.stroke || '#333333',
         text: selectedShape.text || '',
         fontSize: selectedShape.fontSize || 24,
         strokeWidth: selectedShape.strokeWidth || 2,
@@ -65,6 +66,7 @@ function PropertiesPanel({
         height: Math.round(selectedShape.height) || 0,
         rotation: Math.round(selectedShape.rotation || 0),
         fill: selectedShape.fill || '#FF6B6B',
+        stroke: selectedShape.stroke || '#333333',
         text: selectedShape.text || '',
         fontSize: selectedShape.fontSize || 24,
         strokeWidth: selectedShape.strokeWidth || 2,
@@ -80,6 +82,7 @@ function PropertiesPanel({
     selectedShape?.height,
     selectedShape?.rotation,
     selectedShape?.fill,
+    selectedShape?.stroke,
     selectedShape?.text,
     selectedShape?.fontSize,
     selectedShape?.strokeWidth,
@@ -219,12 +222,16 @@ function PropertiesPanel({
   const handleColorChange = (newColor) => {
     if (!selectedShape) return;
 
+    // Determine the property to update based on shape type
+    const colorProperty = selectedShape.type === SHAPE_TYPES.LINE ? 'stroke' : 'fill';
+    const oldColorValue = selectedShape.type === SHAPE_TYPES.LINE ? selectedShape.stroke : selectedShape.fill;
+
     // Update local state immediately for smooth UI
-    setLocalProperties(prev => ({ ...prev, fill: newColor }));
+    setLocalProperties(prev => ({ ...prev, [colorProperty]: newColor }));
 
     // Store the original color if not already stored
-    if (previousValuesRef.current['fill'] === undefined) {
-      previousValuesRef.current['fill'] = selectedShape.fill;
+    if (previousValuesRef.current[colorProperty] === undefined) {
+      previousValuesRef.current[colorProperty] = oldColorValue;
     }
 
     // Clear existing timeout
@@ -235,27 +242,27 @@ function PropertiesPanel({
     // Debounce the update (200ms delay)
     updateTimeoutRef.current = setTimeout(async () => {
       try {
-        const oldColor = previousValuesRef.current['fill'];
-        await updateShapes(selectedShape.id, { fill: newColor });
+        const oldColor = previousValuesRef.current[colorProperty];
+        await updateShapes(selectedShape.id, { [colorProperty]: newColor });
 
         if (addToHistory && oldColor !== newColor) {
           addToHistory({
             type: 'UPDATE',
             data: {
               shapeIds: [selectedShape.id],
-              previousStates: [{ id: selectedShape.id, updates: { fill: oldColor } }],
-              newStates: [{ id: selectedShape.id, updates: { fill: newColor } }]
+              previousStates: [{ id: selectedShape.id, updates: { [colorProperty]: oldColor } }],
+              newStates: [{ id: selectedShape.id, updates: { [colorProperty]: newColor } }]
             }
           });
         }
 
         // Clear the stored previous value
-        delete previousValuesRef.current['fill'];
+        delete previousValuesRef.current[colorProperty];
       } catch (err) {
         console.error('Failed to update color:', err);
         // Revert to old color on error
-        setLocalProperties(prev => ({ ...prev, fill: previousValuesRef.current['fill'] }));
-        delete previousValuesRef.current['fill'];
+        setLocalProperties(prev => ({ ...prev, [colorProperty]: previousValuesRef.current[colorProperty] }));
+        delete previousValuesRef.current[colorProperty];
       }
     }, 200);
   };
@@ -270,22 +277,39 @@ function PropertiesPanel({
       
       if (shapesToUpdate.length === 0) return;
 
-      // Store previous states
-      const previousStates = shapesToUpdate.map(s => ({
-        id: s.id,
-        updates: { [property]: s[property] }
-      }));
-
       // Convert to number if needed
       let finalValue = value;
       if (['x', 'y', 'width', 'height', 'rotation', 'fontSize', 'strokeWidth'].includes(property)) {
         finalValue = parseFloat(value) || 0;
       }
 
+      // For color updates, handle both fill and stroke (lines use stroke)
+      const updates = shapesToUpdate.map(s => {
+        if (property === 'fill' || property === 'color') {
+          // Update fill for shapes that have fill, stroke for lines
+          if (s.type === SHAPE_TYPES.LINE) {
+            return { id: s.id, stroke: finalValue };
+          } else {
+            return { id: s.id, fill: finalValue };
+          }
+        }
+        return { id: s.id, [property]: finalValue };
+      });
+
+      // Store previous states with correct property names
+      const previousStates = shapesToUpdate.map(s => {
+        if (property === 'fill' || property === 'color') {
+          if (s.type === SHAPE_TYPES.LINE) {
+            return { id: s.id, updates: { stroke: s.stroke } };
+          } else {
+            return { id: s.id, updates: { fill: s.fill } };
+          }
+        }
+        return { id: s.id, updates: { [property]: s[property] } };
+      });
+
       // Update all shapes
-      await updateShapes(
-        shapesToUpdate.map(s => ({ id: s.id, [property]: finalValue }))
-      );
+      await updateShapes(updates);
 
       if (addToHistory) {
         addToHistory({
@@ -293,7 +317,7 @@ function PropertiesPanel({
           data: {
             shapeIds: shapesToUpdate.map(s => s.id),
             previousStates,
-            newStates: shapesToUpdate.map(s => ({ id: s.id, updates: { [property]: finalValue } }))
+            newStates: updates.map(u => ({ id: u.id, updates: { ...u, id: undefined } }))
           }
         });
       }
@@ -363,10 +387,12 @@ function PropertiesPanel({
               <label className="property-label">Selected Shapes</label>
               {selectedShapes.map(shape => (
                 <div key={shape.id} className="shape-item">
-                  <div 
-                    className="shape-color-indicator"
-                    style={{ backgroundColor: shape.fill }}
-                  />
+                  {(shape.fill || shape.stroke) && shape.type !== SHAPE_TYPES.IMAGE && (
+                    <div 
+                      className="shape-color-indicator"
+                      style={{ backgroundColor: shape.type === SHAPE_TYPES.LINE ? shape.stroke : shape.fill }}
+                    />
+                  )}
                   <span className="shape-type">{shape.type}</span>
                   <span className="shape-position">
                     ({Math.round(shape.x)}, {Math.round(shape.y)})
@@ -523,37 +549,43 @@ function PropertiesPanel({
           </div>
         </div>
 
-        {/* Appearance */}
-        <div className="property-section">
-          <h4 className="section-title">Appearance</h4>
-          
-          <div className="property-row">
-            <label className="property-label">Color</label>
-            <div className="color-picker-container">
-              <input
-                type="color"
-                className="color-input"
-                value={localProperties.fill || '#FF6B6B'}
-                onChange={(e) => handleColorChange(e.target.value)}
-                disabled={hasLockedShapes}
-              />
-              <span className="color-value">{localProperties.fill}</span>
+        {/* Appearance - only show for shapes that have fill/color */}
+        {selectedShape.type !== SHAPE_TYPES.IMAGE && (
+          <div className="property-section">
+            <h4 className="section-title">Appearance</h4>
+            
+            <div className="property-row">
+              <label className="property-label">Color</label>
+              <div className="color-picker-container">
+                <input
+                  type="color"
+                  className="color-input"
+                  value={selectedShape.type === SHAPE_TYPES.LINE ? (localProperties.stroke || '#333333') : (localProperties.fill || '#FF6B6B')}
+                  onChange={(e) => handleColorChange(e.target.value)}
+                  disabled={hasLockedShapes}
+                />
+                <span className="color-value">
+                  {selectedShape.type === SHAPE_TYPES.LINE ? localProperties.stroke : localProperties.fill}
+                </span>
+              </div>
+            </div>
+
+            <div className="color-swatches">
+              {SHAPE_COLORS.map(color => (
+                <button
+                  key={color}
+                  className={`color-swatch ${
+                    (selectedShape.type === SHAPE_TYPES.LINE ? localProperties.stroke : localProperties.fill) === color ? 'active' : ''
+                  }`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => handleColorChange(color)}
+                  disabled={hasLockedShapes}
+                  title={color}
+                />
+              ))}
             </div>
           </div>
-
-          <div className="color-swatches">
-            {SHAPE_COLORS.map(color => (
-              <button
-                key={color}
-                className={`color-swatch ${localProperties.fill === color ? 'active' : ''}`}
-                style={{ backgroundColor: color }}
-                onClick={() => handleColorChange(color)}
-                disabled={hasLockedShapes}
-                title={color}
-              />
-            ))}
-          </div>
-        </div>
+        )}
 
         {/* Text Properties */}
         {selectedShape.type === SHAPE_TYPES.TEXT && (

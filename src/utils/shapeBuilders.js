@@ -215,11 +215,11 @@ export function buildShapeObject(type, x, y, properties = {}) {
   const normalizedType = normalizeShapeType(type);
   const color = properties.color ? normalizeColor(properties.color) : (properties.fill || SHAPE_COLORS[0]);
   
+  // Base shape data (without fill - we'll add it conditionally)
   const shapeData = {
     type: normalizedType,
     x,
     y,
-    fill: color,
     width: properties.width || SHAPE_DEFAULTS.WIDTH,
     height: properties.height || SHAPE_DEFAULTS.HEIGHT,
     rotation: properties.rotation || 0,
@@ -232,17 +232,19 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.text = properties.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
     shapeData.fontSize = properties.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
     shapeData.fontFamily = properties.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+    shapeData.fill = color; // Text needs fill for color
   } else if (normalizedType === SHAPE_TYPES.IMAGE) {
-    // Image shapes require imageUrl and scaleX/scaleY
+    // Image shapes require imageUrl and scaleX/scaleY (no fill property)
     shapeData.imageUrl = properties.imageUrl || '';
     shapeData.scaleX = properties.scaleX ?? 1;
     shapeData.scaleY = properties.scaleY ?? 1;
-    delete shapeData.fill; // Images don't have fill
   } else if (normalizedType === SHAPE_TYPES.RECTANGLE) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
     shapeData.cornerRadius = properties.cornerRadius || SHAPE_DEFAULTS.CORNER_RADIUS;
   } else if (normalizedType === SHAPE_TYPES.CIRCLE) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
   } else if (normalizedType === SHAPE_TYPES.LINE) {
@@ -252,8 +254,9 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
     shapeData.scaleX = 1; // Lines should always have scale = 1, transformations baked into points
     shapeData.scaleY = 1;
-    delete shapeData.fill; // Lines don't have fill
+    // Lines don't have fill - just omit it
   } else if (normalizedType === SHAPE_TYPES.STAR) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
     shapeData.numPoints = properties.numPoints || 5;

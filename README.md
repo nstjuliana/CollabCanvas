@@ -59,7 +59,7 @@ A real-time collaborative design tool that enables multiple users to work togeth
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/collabcanvas.git
+   git clone https://github.com/nstjuliana/collabcanvas.git
    cd collabcanvas
    ```
 

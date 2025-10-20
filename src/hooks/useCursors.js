@@ -189,7 +189,7 @@ function useCursors() {
       }
       unsubscribeConnection();
     };
-  }, []);
+  }, [presence]); // IMPORTANT: Must include presence to update color mapping
 
   /**
    * Update the current user's cursor position

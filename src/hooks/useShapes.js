@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   createShape as createShapeService,
+  createMultipleShapes as createMultipleShapesService,
   updateShape as updateShapeService,
   deleteShape as deleteShapeService,
   clearAllShapes as clearAllShapesService,
@@ -34,9 +35,8 @@ function useShapes(presence = {}) {
   const userId = getUserId();
   const previousPresenceRef = useRef({});
 
-  // Subscribe to real-time shape updates
+  // Subscribe to real-time shape updates - only once on mount
   useEffect(() => {
-    
     const unsubscribe = subscribeToShapes((updatedShapes) => {
       setShapes(updatedShapes);
       setLoading(false);
@@ -45,12 +45,17 @@ function useShapes(presence = {}) {
 
     unsubscribeRef.current = unsubscribe;
 
-    // Cleanup subscription on unmount
+    // Cleanup subscription only on unmount
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current();
       }
-      
+    };
+  }, []); // Empty deps - subscription should persist for component lifetime
+
+  // Separate effect to unlock shapes on unmount
+  useEffect(() => {
+    return () => {
       // Unlock any selected shapes on cleanup
       if (selectedShapeIds.length > 0) {
         selectedShapeIds.forEach(shapeId => {
@@ -71,12 +76,17 @@ function useShapes(presence = {}) {
     );
 
     // Unlock shapes for each disconnected user
-    disconnectedUserIds.forEach(async (disconnectedUserId) => {
-      try {
-        const count = await unlockShapesForUser(disconnectedUserId);
-      } catch (err) {
-      }
-    });
+    if (disconnectedUserIds.length > 0) {
+      
+      disconnectedUserIds.forEach(async (disconnectedUserId) => {
+        try {
+          const count = await unlockShapesForUser(disconnectedUserId);
+          if (count > 0) {
+          }
+        } catch (err) {
+        }
+      });
+    }
 
     // Update the previous presence reference
     previousPresenceRef.current = currentPresence;
@@ -92,6 +102,22 @@ function useShapes(presence = {}) {
       setError(null);
       const shapeId = await createShapeService(shapeData);
       return shapeId;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
+
+  /**
+   * Create multiple shapes at once (batch operation)
+   * @param {Array<object>} shapesData - Array of shape properties
+   * @returns {Promise<Array<string>>} Array of created shape IDs
+   */
+  const createMultipleShapes = useCallback(async (shapesData) => {
+    try {
+      setError(null);
+      const shapeIds = await createMultipleShapesService(shapesData);
+      return shapeIds;
     } catch (err) {
       setError(err.message);
       throw err;
@@ -375,6 +401,7 @@ function useShapes(presence = {}) {
     
     // Methods
     createShape,
+    createMultipleShapes,
     updateShape,
     deleteShape,
     deleteMultipleShapes,

@@ -52,6 +52,7 @@ function Canvas() {
     selectedShapeIds,
     selectedShapeId,
     createShape,
+    createMultipleShapes,
     updateShape,
     deleteShape,
     deleteMultipleShapes,
@@ -118,6 +119,7 @@ function Canvas() {
     handleUndo,
     handleRedo,
     createShape,
+    createMultipleShapes,
     selectShapes
   });
 

@@ -104,6 +104,92 @@ export async function createShape(shapeData) {
 }
 
 /**
+ * Create multiple shapes at once using batch write
+ * @param {Array<object>} shapesData - Array of shape properties
+ * @returns {Promise<Array<string>>} Array of created shape IDs
+ * @throws {Error} Firestore error
+ */
+export async function createMultipleShapes(shapesData) {
+  try {
+    const userId = getUserId();
+    if (!userId) {
+      throw new Error('User must be authenticated to create shapes');
+    }
+
+    // Generate IDs and prepare shapes
+    const batch = writeBatch(db);
+    const shapeIds = [];
+    const shapesRef = collection(db, COLLECTIONS.SHAPES);
+
+    for (const shapeData of shapesData) {
+      // Create a new document reference with auto-generated ID
+      const docRef = doc(shapesRef);
+      shapeIds.push(docRef.id);
+
+      // Prepare shape document with defaults (same logic as createShape)
+      const shape = {
+        type: shapeData.type || SHAPE_TYPES.RECTANGLE,
+        x: shapeData.x || 0,
+        y: shapeData.y || 0,
+        fill: shapeData.fill || DEFAULT_SHAPE_COLOR,
+        opacity: shapeData.opacity ?? SHAPE_DEFAULTS.OPACITY,
+        rotation: shapeData.rotation || 0,
+        
+        // Metadata
+        createdBy: userId,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        lockedBy: null,
+        lockedAt: null,
+      };
+
+      // Add type-specific properties (same as createShape)
+      if (shapeData.type === SHAPE_TYPES.TEXT) {
+        shape.text = shapeData.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
+        shape.fontSize = shapeData.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
+        shape.fontFamily = shapeData.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+      } else if (shapeData.type === SHAPE_TYPES.IMAGE) {
+        shape.imageUrl = shapeData.imageUrl;
+        shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+        shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+      } else if (shapeData.type === SHAPE_TYPES.LINE) {
+        shape.points = shapeData.points || [0, 0, SHAPE_DEFAULTS.WIDTH, 0];
+        shape.stroke = shapeData.stroke || shape.fill || '#333333';
+        shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
+        delete shape.fill;
+      } else if (shapeData.type === SHAPE_TYPES.STAR) {
+        shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+        shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+        shape.numPoints = shapeData.numPoints || 5;
+        shape.innerRadius = shapeData.innerRadius || (Math.min(shape.width, shape.height) / 2) * 0.5;
+        shape.outerRadius = shapeData.outerRadius || Math.min(shape.width, shape.height) / 2;
+        shape.stroke = shapeData.stroke || '#333333';
+        shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
+      } else {
+        shape.width = shapeData.width || SHAPE_DEFAULTS.WIDTH;
+        shape.height = shapeData.height || SHAPE_DEFAULTS.HEIGHT;
+        shape.stroke = shapeData.stroke || '#333333';
+        shape.strokeWidth = shapeData.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
+        
+        if (shapeData.type === SHAPE_TYPES.RECTANGLE) {
+          shape.cornerRadius = shapeData.cornerRadius || SHAPE_DEFAULTS.CORNER_RADIUS;
+        }
+      }
+
+      // Add to batch
+      batch.set(docRef, shape);
+    }
+
+    // Commit all writes at once
+    await batch.commit();
+
+    return shapeIds;
+  } catch (error) {
+    throw new Error(`Failed to create shapes: ${error.message}`);
+  }
+}
+
+/**
  * Update an existing shape in Firestore
  * @param {string} shapeId - Shape ID to update
  * @param {object} updates - Properties to update
@@ -395,6 +481,7 @@ export async function unlockShapesForUser(targetUserId) {
     
     const batch = writeBatch(db);
     let count = 0;
+    const unlockedShapeIds = [];
 
     snapshot.forEach((doc) => {
       const shape = doc.data();
@@ -404,11 +491,13 @@ export async function unlockShapesForUser(targetUserId) {
           lockedAt: null,
         });
         count++;
+        unlockedShapeIds.push(doc.id);
       }
     });
 
     if (count > 0) {
       await batch.commit();
+    } else {
     }
     
     return count;

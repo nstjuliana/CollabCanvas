@@ -17,6 +17,7 @@ const useKeyboardShortcuts = ({
   handleUndo,
   handleRedo,
   createShape,
+  createMultipleShapes,
   selectShapes
 }) => {
   // Clipboard for copy/paste
@@ -48,28 +49,38 @@ const useKeyboardShortcuts = ({
         e.preventDefault();
         
         const offset = 20; // Offset for pasted shapes
-        const pastedShapes = [];
-        const newShapeIds = [];
 
         try {
-          // Create new shapes from clipboard
-          for (const shapeToCopy of clipboardRef.current) {
-            // Create a copy of the shape with offset position
+          // Prepare all shapes for batch creation
+          const shapesToCreate = clipboardRef.current.map(shapeToCopy => {
             const { id, lockedBy, lockedAt, createdAt, updatedAt, ...shapeProps } = shapeToCopy;
-            const newShape = {
+            return {
               ...shapeProps,
               x: shapeProps.x + offset,
               y: shapeProps.y + offset,
             };
+          });
 
-            const newShapeId = await createShape(newShape);
-            newShapeIds.push(newShapeId);
-            pastedShapes.push({ id: newShapeId, ...newShape });
+          // Use batch creation if pasting multiple shapes, otherwise use single create
+          let newShapeIds;
+          if (shapesToCreate.length > 1) {
+            // Batch create for multiple shapes - much faster!
+            newShapeIds = await createMultipleShapes(shapesToCreate);
+          } else {
+            // Single create for one shape
+            const shapeId = await createShape(shapesToCreate[0]);
+            newShapeIds = [shapeId];
           }
 
           // Select the newly pasted shapes
           if (newShapeIds.length > 0) {
             selectShapes(newShapeIds, false);
+            
+            // Prepare shapes for history
+            const pastedShapes = newShapeIds.map((id, index) => ({
+              id,
+              ...shapesToCreate[index]
+            }));
             
             // Add to history for undo
             if (pastedShapes.length === 1) {
@@ -84,7 +95,7 @@ const useKeyboardShortcuts = ({
               });
             }
             
-            console.log(`Pasted ${pastedShapes.length} shape(s)`);
+            console.log(`Pasted ${pastedShapes.length} shape(s) using ${shapesToCreate.length > 1 ? 'batch write' : 'single write'}`);
           }
         } catch (err) {
           console.error('Error pasting shapes:', err);
@@ -228,6 +239,7 @@ const useKeyboardShortcuts = ({
     handleUndo,
     handleRedo,
     createShape,
+    createMultipleShapes,
     selectShapes
   ]);
 };

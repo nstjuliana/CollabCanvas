@@ -20,6 +20,9 @@ function ShapesLayer({
   isEditingText,
   editingShapeId
 }) {
+  // Debug: Log presence data once
+  console.log('[ShapesLayer] Presence data:', presence, 'Shapes with locks:', shapes.filter(s => s.lockedBy).length);
+  
   return (
     <Layer>
       {/* Real-time shapes from Firestore */}
@@ -34,6 +37,19 @@ function ShapesLayer({
         const lockerColor = lockedByUser?.color || null;
         const lockerName = lockedByUser?.displayName || null;
         
+        // Show name tag only if locked by another user (not by current user)
+        const showNameTag = isLockedByOther(shape.id) && lockerName;
+        
+        // Debug locked shapes
+        if (shape.lockedBy) {
+          console.log(`[ShapesLayer] Shape ${shape.id} locked by ${shape.lockedBy}:`, {
+            lockedByUser,
+            lockerName,
+            showNameTag,
+            isLockedByOther: isLockedByOther(shape.id)
+          });
+        }
+        
         return (
           <Shape
             key={shape.id}
@@ -42,7 +58,7 @@ function ShapesLayer({
             isLocked={isLockedByOther(shape.id)}
             isInSelectionPreview={selectionPreviewIds.includes(shape.id)}
             lockerColor={lockerColor}
-            lockerName={lockerName}
+            lockerName={showNameTag ? lockerName : null}
             stageScale={stageScale}
             onDragStart={(e) => onShapeDragStart(e, shape)}
             onDragEnd={(e) => onShapeDragEnd(e, shape)}

@@ -22,9 +22,9 @@ function App() {
   // Get presence data for mobile header
   const { onlineUsers, onlineUserCount } = usePresence();
 
-  // Show up to 3 users in circles, rest in tooltip
-  const displayedUsers = onlineUsers.slice(0, 3);
-  const hiddenUsers = onlineUsers.slice(3);
+  // Show only current user's circle, rest in +N tooltip
+  const displayedUsers = onlineUsers.filter(u => u.userId === user?.uid);
+  const hiddenUsers = onlineUsers.filter(u => u.userId !== user?.uid);
 
   // Calculate tooltip position when it should be shown
   useEffect(() => {

@@ -49,6 +49,7 @@ const useKeyboardShortcuts = ({
         e.preventDefault();
         
         const offset = 20; // Offset for pasted shapes
+        const activeShape = shapes.find(s => s.id === selectedShapeIds[0]).getCoordinates();
 
         try {
           // Prepare all shapes for batch creation
@@ -56,8 +57,8 @@ const useKeyboardShortcuts = ({
             const { id, lockedBy, lockedAt, createdAt, updatedAt, ...shapeProps } = shapeToCopy;
             return {
               ...shapeProps,
-              x: shapeProps.x + offset,
-              y: shapeProps.y + offset,
+              x: activeShape.x + offset,
+              y: activeShape.y + offset,
             };
           });
 

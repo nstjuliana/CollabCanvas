@@ -69,19 +69,52 @@ const useUndoRedoActions = ({
           break;
         }
 
-        case ACTION_TYPES.DELETE_MULTIPLE: {
-          // Undo multiple deletes by recreating all shapes
-          const { shapes: deletedShapes } = action.data;
-          const newShapeIds = [];
-          for (const shape of deletedShapes) {
-            const { id, lockedBy, lockedAt, ...shapeData } = shape;
-            const newShapeId = await createShapes(shapeData);
-            // Map old ID to new ID
-            undoRedoIdMap.current[id] = newShapeId;
-            newShapeIds.push(newShapeId);
+        case ACTION_TYPES.CREATE_MULTIPLE: {
+          // Undo multiple creates by deleting all shapes
+          const { shapes: createdShapes } = action.data;
+          const idsToDelete = [];
+          for (const { shapeId } of createdShapes) {
+            const currentId = undoRedoIdMap.current[shapeId] || shapeId;
+            const shape = shapes.find(s => s.id === currentId);
+            if (shape) {
+              idsToDelete.push(currentId);
+              // Store the full shape data for redo (without ID/locks) if not already stored
+              const shapeEntry = createdShapes.find(s => s.shapeId === shapeId);
+              if (shapeEntry && !shapeEntry.fullShapeData) {
+                const { id, lockedBy, lockedAt, ...shapeData } = shape;
+                shapeEntry.fullShapeData = shapeData;
+              }
+            }
           }
+          if (idsToDelete.length > 0) {
+            await deleteMultipleShapes(idsToDelete);
+          }
+          break;
+        }
+
+        case ACTION_TYPES.DELETE_MULTIPLE: {
+          // Undo multiple deletes by recreating all shapes in a batch
+          const { shapes: deletedShapes } = action.data;
+          
+          // Prepare all shape data for batch creation
+          const shapesToCreate = deletedShapes.map(shape => {
+            const { id, lockedBy, lockedAt, ...shapeData } = shape;
+            return shapeData;
+          });
+          
+          // Create all shapes in a single batch operation
+          const newShapeIds = await createShapes(shapesToCreate);
+          const idsArray = Array.isArray(newShapeIds) ? newShapeIds : [newShapeIds];
+          
+          // Map old IDs to new IDs
+          deletedShapes.forEach((shape, index) => {
+            if (idsArray[index]) {
+              undoRedoIdMap.current[shape.id] = idsArray[index];
+            }
+          });
+          
           // Auto-select all restored shapes
-          selectShapes(newShapeIds);
+          selectShapes(idsArray);
           break;
         }
 
@@ -150,6 +183,33 @@ const useUndoRedoActions = ({
 
           if (shapes.find(s => s.id === currentId)) {
             await deleteShape(currentId);
+          }
+          break;
+        }
+
+        case ACTION_TYPES.CREATE_MULTIPLE: {
+          // Redo multiple creates by recreating all shapes in a batch
+          const { shapes: createdShapes } = action.data;
+          
+          // Prepare all shape data for batch creation
+          const shapesToCreate = createdShapes
+            .map(({ shapeData, fullShapeData }) => fullShapeData || shapeData)
+            .filter(Boolean);
+          
+          if (shapesToCreate.length > 0) {
+            // Create all shapes in a single batch operation
+            const newShapeIds = await createShapes(shapesToCreate);
+            const idsArray = Array.isArray(newShapeIds) ? newShapeIds : [newShapeIds];
+            
+            // Map original IDs to new IDs
+            createdShapes.forEach(({ shapeId: originalId }, index) => {
+              if (idsArray[index]) {
+                undoRedoIdMap.current[originalId] = idsArray[index];
+              }
+            });
+            
+            // Auto-select all recreated shapes
+            selectShapes(idsArray);
           }
           break;
         }

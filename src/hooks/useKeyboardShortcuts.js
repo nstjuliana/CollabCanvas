@@ -50,13 +50,25 @@ const useKeyboardShortcuts = ({
         const activeShape = shapes.find(s => s.id === selectedShapeIds[0]);
 
         try {
-          // Prepare all shapes for batch creation
-          const shapesToCreate = clipboardRef.current.map(shapeToCopy => {
+          // Calculate the bounding box of the copied shapes to maintain relative positions
+          const copiedShapes = clipboardRef.current;
+          const minX = Math.min(...copiedShapes.map(s => s.x));
+          const minY = Math.min(...copiedShapes.map(s => s.y));
+          
+          // Determine the paste location (use active shape if available, otherwise use original position + offset)
+          const pasteX = activeShape ? activeShape.x + offset : minX + offset;
+          const pasteY = activeShape ? activeShape.y + offset : minY + offset;
+          
+          // Prepare all shapes for batch creation, maintaining relative positions
+          const shapesToCreate = copiedShapes.map(shapeToCopy => {
             const { id, lockedBy, lockedAt, createdAt, updatedAt, ...shapeProps } = shapeToCopy;
+            // Calculate the offset from the top-left of the group
+            const relativeX = shapeToCopy.x - minX;
+            const relativeY = shapeToCopy.y - minY;
             return {
               ...shapeProps,
-              x: activeShape.x + offset,
-              y: activeShape.y + offset,
+              x: pasteX + relativeX,
+              y: pasteY + relativeY,
             };
           });
 
@@ -69,22 +81,21 @@ const useKeyboardShortcuts = ({
           if (newShapeIds.length > 0) {
             selectShapes(newShapeIds, false);
             
-            // Prepare shapes for history
-            const pastedShapes = newShapeIds.map((id, index) => ({
-              id,
-              ...shapesToCreate[index]
-            }));
-            
             // Add to history for undo
-            if (pastedShapes.length === 1) {
+            if (newShapeIds.length === 1) {
               addToHistory({
                 type: ACTION_TYPES.CREATE,
-                data: { shape: pastedShapes[0] }
+                data: { shapeId: newShapeIds[0], shapeData: shapesToCreate[0] }
               });
             } else {
+              // For multiple shapes, store as CREATE_MULTIPLE
+              const shapesData = newShapeIds.map((id, index) => ({
+                shapeId: id,
+                shapeData: shapesToCreate[index]
+              }));
               addToHistory({
-                type: ACTION_TYPES.DELETE_MULTIPLE, // Use this for multi-create undo
-                data: { shapes: pastedShapes }
+                type: ACTION_TYPES.CREATE_MULTIPLE,
+                data: { shapes: shapesData }
               });
             }
             

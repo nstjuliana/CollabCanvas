@@ -152,79 +152,119 @@ export async function deleteShape(shapeId) {
 }
 
 /**
- * Lock a shape for editing (prevents other users from editing)
- * First user to lock gets priority
- * @param {string} shapeId - Shape ID to lock
- * @returns {Promise<boolean>} True if lock was successful, false if already locked
+ * Lock one or more shapes for editing (prevents other users from editing)
+ * @param {string|string[]} shapeIds - Shape ID(s) to lock
+ * @returns {Promise<string[]>} Array of successfully locked shape IDs
  * @throws {Error} Firestore error
  */
-export async function lockShape(shapeId) {
+export async function lockShapes(shapeIds) {
   try {
     const userId = getUserId();
     if (!userId) {
       throw new Error('User must be authenticated to lock shapes');
     }
 
-    const shapeRef = doc(db, COLLECTIONS.SHAPES, shapeId);
-    const shapeDoc = await getDoc(shapeRef);
+    // Normalize to array
+    const idsArray = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
     
-    if (!shapeDoc.exists()) {
-      throw new Error('Shape not found');
-    }
-
-    const shapeData = shapeDoc.data();
-
-    // Check if already locked by another user
-    if (shapeData.lockedBy && shapeData.lockedBy !== userId) {
-      return false;
-    }
-
-    // Lock the shape
-    await updateDoc(shapeRef, {
-      lockedBy: userId,
-      lockedAt: serverTimestamp(),
+    // First, read all shapes to check lock status
+    const shapeRefs = idsArray.map(id => doc(db, COLLECTIONS.SHAPES, id));
+    const shapeDocs = await Promise.all(shapeRefs.map(ref => getDoc(ref)));
+    
+    // Filter to only shapes that can be locked
+    const lockableShapes = [];
+    shapeDocs.forEach((shapeDoc, index) => {
+      if (shapeDoc.exists()) {
+        const data = shapeDoc.data();
+        // Can lock if not locked, or locked by current user
+        if (!data.lockedBy || data.lockedBy === userId) {
+          lockableShapes.push(idsArray[index]);
+        }
+      }
     });
 
-    return true;
+    if (lockableShapes.length === 0) {
+      return [];
+    }
+
+    // Use batch write to lock all shapes at once
+    const batch = writeBatch(db);
+    lockableShapes.forEach(id => {
+      const shapeRef = doc(db, COLLECTIONS.SHAPES, id);
+      batch.update(shapeRef, {
+        lockedBy: userId,
+        lockedAt: serverTimestamp(),
+      });
+    });
+
+    await batch.commit();
+    return lockableShapes;
   } catch (error) {
-    throw new Error(`Failed to lock shape: ${error.message}`);
+    throw new Error(`Failed to lock shape(s): ${error.message}`);
   }
 }
 
+// Backward compatibility - single shape
+export async function lockShape(shapeId) {
+  const locked = await lockShapes(shapeId);
+  return locked.length > 0;
+}
+
 /**
- * Unlock a shape (allow other users to edit)
- * @param {string} shapeId - Shape ID to unlock
+ * Unlock one or more shapes (allow other users to edit)
+ * @param {string|string[]} shapeIds - Shape ID(s) to unlock
  * @returns {Promise<void>}
  * @throws {Error} Firestore error
  */
-export async function unlockShape(shapeId) {
+export async function unlockShapes(shapeIds) {
   try {
     const userId = getUserId();
     if (!userId) {
       throw new Error('User must be authenticated to unlock shapes');
     }
 
-    const shapeRef = doc(db, COLLECTIONS.SHAPES, shapeId);
-    const shapeDoc = await getDoc(shapeRef);
+    // Normalize to array
+    const idsArray = Array.isArray(shapeIds) ? shapeIds : [shapeIds];
     
-    if (!shapeDoc.exists()) {
+    // Read all shapes to check ownership
+    const shapeRefs = idsArray.map(id => doc(db, COLLECTIONS.SHAPES, id));
+    const shapeDocs = await Promise.all(shapeRefs.map(ref => getDoc(ref)));
+    
+    // Filter to only shapes that can be unlocked by this user
+    const unlockableShapes = [];
+    shapeDocs.forEach((shapeDoc, index) => {
+      if (shapeDoc.exists()) {
+        const data = shapeDoc.data();
+        // Can unlock if not locked, or locked by current user
+        if (!data.lockedBy || data.lockedBy === userId) {
+          unlockableShapes.push(idsArray[index]);
+        }
+      }
+    });
+
+    if (unlockableShapes.length === 0) {
       return;
     }
 
-    const shapeData = shapeDoc.data();
-
-    // Only the user who locked it can unlock it (or if it's not locked)
-    if (!shapeData.lockedBy || shapeData.lockedBy === userId) {
-      await updateDoc(shapeRef, {
+    // Use batch write to unlock all shapes at once
+    const batch = writeBatch(db);
+    unlockableShapes.forEach(id => {
+      const shapeRef = doc(db, COLLECTIONS.SHAPES, id);
+      batch.update(shapeRef, {
         lockedBy: null,
         lockedAt: null,
       });
+    });
 
-    } else {
-    }
+    await batch.commit();
   } catch (error) {
     // Don't throw error for unlock failures (graceful degradation)
   }
+}
+
+// Backward compatibility - single shape
+export async function unlockShape(shapeId) {
+  await unlockShapes(shapeId);
 }
 
 /**

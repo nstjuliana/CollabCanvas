@@ -11,8 +11,8 @@ import {
   clearAllShapes as clearAllShapesService,
   clearAllLocks as clearAllLocksService,
   subscribeToShapes,
-  lockShape as lockShapeService,
-  unlockShape as unlockShapeService,
+  lockShapes as lockShapesService,
+  unlockShapes as unlockShapesService,
   unlockShapesForUser,
   isShapeLockedByOther,
   isShapeLockedByMe,
@@ -55,11 +55,9 @@ function useShapes(presence = {}) {
   // Separate effect to unlock shapes on unmount
   useEffect(() => {
     return () => {
-      // Unlock any selected shapes on cleanup
+      // Unlock any selected shapes on cleanup (batch unlock)
       if (selectedShapeIds.length > 0) {
-        selectedShapeIds.forEach(shapeId => {
-          unlockShapeService(shapeId).catch(err => {});
-        });
+        unlockShapesService(selectedShapeIds).catch(err => {});
       }
     };
   }, [selectedShapeIds]);
@@ -198,34 +196,45 @@ function useShapes(presence = {}) {
   }, []);
 
   /**
-   * Lock a shape for editing
-   * @param {string} shapeId - Shape ID
-   * @returns {Promise<boolean>} True if lock was successful
+   * Lock one or more shapes for editing
+   * @param {string|string[]} shapeIds - Shape ID(s) to lock
+   * @returns {Promise<string[]>} Array of successfully locked shape IDs
    */
-  const lockShape = useCallback(async (shapeId) => {
+  const lockShapes = useCallback(async (shapeIds) => {
     try {
       setError(null);
-      const success = await lockShapeService(shapeId);
-      return success;
+      const lockedIds = await lockShapesService(shapeIds);
+      return lockedIds;
     } catch (err) {
       setError(err.message);
-      return false;
+      return [];
     }
   }, []);
 
+  // Backward compatibility
+  const lockShape = useCallback(async (shapeId) => {
+    const locked = await lockShapes(shapeId);
+    return locked.length > 0;
+  }, [lockShapes]);
+
   /**
-   * Unlock a shape
-   * @param {string} shapeId - Shape ID
+   * Unlock one or more shapes
+   * @param {string|string[]} shapeIds - Shape ID(s) to unlock
    * @returns {Promise<void>}
    */
-  const unlockShape = useCallback(async (shapeId) => {
+  const unlockShapes = useCallback(async (shapeIds) => {
     try {
       setError(null);
-      await unlockShapeService(shapeId);
+      await unlockShapesService(shapeIds);
     } catch (err) {
       // Don't set error state for unlock failures (graceful degradation)
     }
   }, []);
+
+  // Backward compatibility
+  const unlockShape = useCallback(async (shapeId) => {
+    await unlockShapes(shapeId);
+  }, [unlockShapes]);
 
   /**
    * Select shapes (single or multiple)
@@ -237,8 +246,8 @@ function useShapes(presence = {}) {
       // Handle null (deselect all)
       if (shapeIds === null) {
         setSelectedShapeIds([]);
-        // Unlock in background
-        Promise.all(selectedShapeIds.map(id => unlockShapeService(id))).catch(err => {});
+        // Unlock in background (batch unlock)
+        unlockShapesService(selectedShapeIds).catch(err => {});
         return;
       }
 
@@ -255,13 +264,13 @@ function useShapes(presence = {}) {
             // Already selected, remove it
             newSelection.splice(index, 1);
             // Unlock in background
-            unlockShapeService(id).catch(err => {});
+            unlockShapesService(id).catch(err => {});
           } else {
             // Not selected, add it optimistically
             newSelection.push(id);
             // Lock in background
-            lockShapeService(id).then(success => {
-              if (!success) {
+            lockShapesService(id).then(lockedIds => {
+              if (lockedIds.length === 0) {
                 // Lock failed, remove from selection
                 setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
               }
@@ -275,20 +284,23 @@ function useShapes(presence = {}) {
         // Update UI immediately
         setSelectedShapeIds(idsToSelect);
         
-        // Unlock previously selected shapes that aren't in the new selection (in background)
+        // Unlock previously selected shapes that aren't in the new selection (in background, batch)
         const shapesToUnlock = selectedShapeIds.filter(id => !idsToSelect.includes(id));
-        Promise.all(shapesToUnlock.map(id => unlockShapeService(id))).catch(err => {});
+        if (shapesToUnlock.length > 0) {
+          unlockShapesService(shapesToUnlock).catch(err => {});
+        }
         
-        // Lock newly selected shapes (in background)
+        // Lock newly selected shapes (in background, batch)
         const shapesToLock = idsToSelect.filter(id => !selectedShapeIds.includes(id));
-        shapesToLock.forEach(id => {
-          lockShapeService(id).then(success => {
-            if (!success) {
-              // Lock failed, remove from selection
-              setSelectedShapeIds(prev => prev.filter(selectedId => selectedId !== id));
+        if (shapesToLock.length > 0) {
+          lockShapesService(shapesToLock).then(lockedIds => {
+            // Remove any shapes that failed to lock
+            if (lockedIds.length !== shapesToLock.length) {
+              const failedLocks = shapesToLock.filter(id => !lockedIds.includes(id));
+              setSelectedShapeIds(prev => prev.filter(id => !failedLocks.includes(id)));
             }
           }).catch(err => {});
-        });
+        }
       }
     } catch (err) {
     }
@@ -350,13 +362,14 @@ function useShapes(presence = {}) {
     }
 
     // Lock the shape and select it
-    const success = await lockShape(shapeId);
+    const lockedIds = await lockShapes(shapeId);
+    const success = lockedIds.length > 0;
     if (success) {
       // Use setSelectedShapeIds directly to avoid the async selectShapes logic
       setSelectedShapeIds([shapeId]);
     }
     return success;
-  }, [isLockedByOther, isLockedByMe, lockShape]);
+  }, [isLockedByOther, isLockedByMe, lockShapes]);
 
   /**
    * Handle shape drag end - update position
@@ -394,8 +407,10 @@ function useShapes(presence = {}) {
     deleteMultipleShapes,
     clearAllShapes,
     clearAllLocks,
-    lockShape,
-    unlockShape,
+    lockShapes,
+    lockShape,      // Backward compatibility
+    unlockShapes,
+    unlockShape,    // Backward compatibility
     selectShape,
     selectShapes,
     

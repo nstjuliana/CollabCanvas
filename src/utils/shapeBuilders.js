@@ -47,7 +47,7 @@ const COLOR_RANGES = {
   green: { r: [0, 150], g: [100, 255], b: [0, 150] },
   cyan: { r: [0, 150], g: [150, 255], b: [180, 255] },
   aqua: { r: [0, 150], g: [150, 255], b: [180, 255] },
-  blue: { r: [0, 150], g: [0, 220], b: [128, 255] }, // Expanded to include cyan-ish blues
+  blue: { r: [0, 150], g: [0, 220], b: [128, 255] }, 
   purple: { r: [100, 200], g: [0, 100], b: [150, 255] },
   violet: { r: [100, 200], g: [0, 100], b: [150, 255] },
   pink: { r: [200, 255], g: [100, 180], b: [150, 220] },
@@ -58,7 +58,7 @@ const COLOR_RANGES = {
   white: { r: [220, 255], g: [220, 255], b: [220, 255] },
   magenta: { r: [180, 255], g: [0, 100], b: [180, 255] },
   fuchsia: { r: [180, 255], g: [0, 100], b: [180, 255] },
-  teal: { r: [0, 120], g: [100, 220], b: [100, 200] }, // More specific teal range
+  teal: { r: [0, 120], g: [100, 220], b: [100, 200] }, 
   olive: { r: [100, 180], g: [100, 180], b: [0, 80] },
   gold: { r: [200, 255], g: [160, 210], b: [0, 80] },
   beige: { r: [200, 245], g: [180, 220], b: [130, 180] },
@@ -215,11 +215,11 @@ export function buildShapeObject(type, x, y, properties = {}) {
   const normalizedType = normalizeShapeType(type);
   const color = properties.color ? normalizeColor(properties.color) : (properties.fill || SHAPE_COLORS[0]);
   
+  // Base shape data (without fill - we'll add it conditionally)
   const shapeData = {
     type: normalizedType,
     x,
     y,
-    fill: color,
     width: properties.width || SHAPE_DEFAULTS.WIDTH,
     height: properties.height || SHAPE_DEFAULTS.HEIGHT,
     rotation: properties.rotation || 0,
@@ -232,11 +232,19 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.text = properties.text || SHAPE_DEFAULTS.TEXT_DEFAULT;
     shapeData.fontSize = properties.fontSize || SHAPE_DEFAULTS.TEXT_FONT_SIZE;
     shapeData.fontFamily = properties.fontFamily || SHAPE_DEFAULTS.TEXT_FONT_FAMILY;
+    shapeData.fill = color; // Text needs fill for color
+  } else if (normalizedType === SHAPE_TYPES.IMAGE) {
+    // Image shapes require imageUrl and scaleX/scaleY (no fill property)
+    shapeData.imageUrl = properties.imageUrl || '';
+    shapeData.scaleX = properties.scaleX ?? 1;
+    shapeData.scaleY = properties.scaleY ?? 1;
   } else if (normalizedType === SHAPE_TYPES.RECTANGLE) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
     shapeData.cornerRadius = properties.cornerRadius || SHAPE_DEFAULTS.CORNER_RADIUS;
   } else if (normalizedType === SHAPE_TYPES.CIRCLE) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
   } else if (normalizedType === SHAPE_TYPES.LINE) {
@@ -246,8 +254,9 @@ export function buildShapeObject(type, x, y, properties = {}) {
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH * 2;
     shapeData.scaleX = 1; // Lines should always have scale = 1, transformations baked into points
     shapeData.scaleY = 1;
-    delete shapeData.fill; // Lines don't have fill
+    // Lines don't have fill - just omit it
   } else if (normalizedType === SHAPE_TYPES.STAR) {
+    shapeData.fill = color;
     shapeData.stroke = properties.stroke || '#333333';
     shapeData.strokeWidth = properties.strokeWidth || SHAPE_DEFAULTS.STROKE_WIDTH;
     shapeData.numPoints = properties.numPoints || 5;
